@@ -261,6 +261,8 @@ export default function TeacherSession({ onLogout }: Props) {
     onLogout()
   }
 
+  const displayed = selectedSection ? attendees.filter(a => a.section === selectedSection) : attendees
+
   return (
     <>
       <div className="teacher-topbar">
@@ -404,9 +406,7 @@ export default function TeacherSession({ onLogout }: Props) {
                 <div className="att-table-head"><h3>Attendance Record</h3><span className="count-badge">{displayed.length}</span></div>
                 {displayed.map((a, i) => {
                   const l = livenessSummary[a.student_id || '']
-  const displayed = selectedSection ? attendees.filter(a => a.section === selectedSection) : attendees
-
-  return (
+                  return (
                     <div key={a.id} className="att-row">
                       {a.face_frame_url ? (
                         <div className="face-thumb-sm" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(a.face_frame_url || '')}><img src={a.face_frame_url} alt="" /></div>
