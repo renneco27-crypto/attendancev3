@@ -50,6 +50,7 @@ export default function TeacherSession({ onLogout }: Props) {
   const [livenessSummary, setLivenessSummary] = useState<Record<string, { score: number; isLive: boolean }>>({})
   const [rosterList, setRosterList] = useState<PendingRequest[]>([])
   const [previewImageUrl, setPreviewImageUrl] = useState('')
+  const [studentPopup, setStudentPopup] = useState<{ name: string; section: string; time: string; img?: string | null } | null>(null)
 
   useEffect(() => { init(); return () => cleanup() }, [])
 
@@ -364,7 +365,7 @@ export default function TeacherSession({ onLogout }: Props) {
                       <div className="att-dot" />
                     )}
                     <div className="att-num">{i + 1}</div>
-                    <div className="att-name">
+                    <div className="att-name" style={{ cursor: 'pointer' }} onClick={() => setStudentPopup({ name: a.student_name, section: a.section || '', time: new Date(a.scanned_at).toLocaleTimeString(), img: a.face_frame_url })}>
                       {a.student_name}
                       {a.section && <span className="section-badge">{a.section}</span>}
                     </div>
@@ -373,7 +374,7 @@ export default function TeacherSession({ onLogout }: Props) {
                     <button className="kick-btn" onClick={() => handleKick(a.id)}>Kick</button>
                   </div>
                 ))
-              )}
+              }
             </div>
             <button className="btn-danger" onClick={handleEndSession}>■ End Session</button>
           </div>
@@ -412,7 +413,7 @@ export default function TeacherSession({ onLogout }: Props) {
                         <div className="face-thumb-sm" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(a.face_frame_url || '')}><img src={a.face_frame_url} alt="" /></div>
                       ) : null}
                       <div className="att-num">{i + 1}</div>
-                      <div className="att-name">
+                      <div className="att-name" style={{ cursor: 'pointer' }} onClick={() => setStudentPopup({ name: a.student_name, section: a.section || '', time: new Date(a.scanned_at).toLocaleTimeString(), img: a.face_frame_url })}>
                         {a.student_name}
                         {a.section && <span className="section-badge">{a.section}</span>}
                       </div>
@@ -491,6 +492,19 @@ export default function TeacherSession({ onLogout }: Props) {
           <MonthlyAttendance selectedSection={selectedSection} />
         </div>
       </div>
+
+      {/* ── STUDENT POPUP OVERLAY ── */}
+      {studentPopup && (
+        <div className="img-preview-overlay" onClick={() => setStudentPopup(null)}>
+          <div style={{ textAlign: 'center', padding: 20 }} onClick={e => e.stopPropagation()}>
+            {studentPopup.img && <img src={studentPopup.img} alt="" style={{ width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--green2)', marginBottom: 16 }} />}
+            <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 6 }}>{studentPopup.name}</div>
+            {studentPopup.section && <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--green-lt)', marginBottom: 6 }}>{studentPopup.section}</div>}
+            <div style={{ fontSize: 16, color: 'rgba(255,255,255,.6)' }}>{studentPopup.time}</div>
+            <span className="img-preview-close" onClick={() => setStudentPopup(null)} style={{ position: 'static', display: 'inline-block', marginTop: 24, fontSize: 16, opacity: 0.5 }}>Tap to close</span>
+          </div>
+        </div>
+      )}
 
       {/* ── IMAGE PREVIEW OVERLAY ── */}
       {previewImageUrl && (
