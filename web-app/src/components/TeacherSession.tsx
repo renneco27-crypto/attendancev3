@@ -280,7 +280,7 @@ export default function TeacherSession({ onLogout }: Props) {
         <div className="section-row">
           <span className="section-label">Section:</span>
           <select className="section-select" value={selectedSection}
-            onChange={e => { const s = e.target.value; setSelectedSection(s); fetchPending(s) }}>
+            onChange={e => { const s = e.target.value; setSelectedSection(s); fetchPending(s); fetchRoster(s) }}>
             <option value="">All Sections</option>
             {SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -349,12 +349,12 @@ export default function TeacherSession({ onLogout }: Props) {
             <div className="att-table-card">
               <div className="att-table-head">
                 <h3>Checked In</h3>
-                <span className="count-badge">{attendees.length}</span>
+                <span className="count-badge">{displayed.length}</span>
               </div>
-              {attendees.length === 0 ? (
+              {displayed.length === 0 ? (
                 <div className="att-empty">Waiting for students to scan…</div>
               ) : (
-                attendees.slice(-20).map((a, i) => (
+                displayed.slice(-20).map((a, i) => (
                   <div key={a.id} className="att-row">
                     {a.face_frame_url ? (
                       <div className="face-thumb-sm" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(a.face_frame_url || '')}><img src={a.face_frame_url} alt="" /></div>
@@ -386,7 +386,7 @@ export default function TeacherSession({ onLogout }: Props) {
 
             <div className="summary-stats">
               <div className="summary-stat">
-                <div className="stat-value">{attendees.length}</div>
+                <div className="stat-value">{displayed.length}</div>
                 <div className="stat-label">Checked In</div>
               </div>
               <div className="summary-stat">
@@ -394,17 +394,19 @@ export default function TeacherSession({ onLogout }: Props) {
                 <div className="stat-label">Liveness Pass</div>
               </div>
               <div className="summary-stat">
-                <div className="stat-value">{attendees.length - Object.values(livenessSummary).filter(s => s.isLive).length}</div>
+                <div className="stat-value">{displayed.length - Object.values(livenessSummary).filter(s => s.isLive).length}</div>
                 <div className="stat-label">No Liveness</div>
               </div>
             </div>
 
-            {attendees.length > 0 && (
+            {displayed.length > 0 && (
               <div className="att-table-card" style={{ marginBottom: 16 }}>
-                <div className="att-table-head"><h3>Attendance Record</h3><span className="count-badge">{attendees.length}</span></div>
-                {attendees.map((a, i) => {
+                <div className="att-table-head"><h3>Attendance Record</h3><span className="count-badge">{displayed.length}</span></div>
+                {displayed.map((a, i) => {
                   const l = livenessSummary[a.student_id || '']
-                  return (
+  const displayed = selectedSection ? attendees.filter(a => a.section === selectedSection) : attendees
+
+  return (
                     <div key={a.id} className="att-row">
                       {a.face_frame_url ? (
                         <div className="face-thumb-sm" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(a.face_frame_url || '')}><img src={a.face_frame_url} alt="" /></div>
