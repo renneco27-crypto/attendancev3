@@ -1,0 +1,39 @@
+[auth]
+enabled = true
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+
+[functions]
+  [functions.issue-session-tokens]
+  enabled = true
+  verify_jwt = false
+
+  [functions.validate-attendance]
+  enabled = true
+  verify_jwt = false
+
+  [functions.request-device-change]
+  enabled = true
+  verify_jwt = false
+
+  [functions.approve-device-change]
+  enabled = true
+  verify_jwt = true
+
+  [functions.request-student-device]
+  enabled = true
+  verify_jwt = false
+
+  [functions.revoke-device]
+  enabled = true
+  verify_jwt = true
+
+  [functions.rotate-session-key]
+  enabled = true
+  verify_jwt = true
+
+  [functions.kick-from-session]
+  enabled = true
+  verify_jwt = true

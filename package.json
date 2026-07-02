@@ -1,0 +1,33 @@
+{
+  "name": "aclc-attendance",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --root web-app",
+    "start": "node backend/index.js",
+    "dev": "node --watch backend/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "better-sqlite3": "^11.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.18.2",
+    "html5-qrcode": "^2.3.8",
+    "qrcode": "^1.5.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "serve": "^14.2.0",
+    "sharp": "^0.33.2",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "supabase": "^2.108.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8"
+  }
+}

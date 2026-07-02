@@ -1,0 +1,20 @@
+# =============================================================================
+# This is NOT a Python project.
+# This file lists prerequisites for the Attendance Scanner web app.
+# =============================================================================
+#
+# System-level:
+#   1. Node.js 20+ (LTS)       https://nodejs.org
+#   2. Git                     https://git-scm.com
+#   3. Supabase CLI            winget install supabase.cli
+#   4. pnpm (package manager)  corepack enable ; corepack prepare pnpm@9.1.0 --activate
+#
+# Project packages (installed via setup.ps1 or pnpm install):
+#   web-app/    react, react-dom, @supabase/supabase-js, html5-qrcode, qrcode
+#
+# Infrastructure:
+#   - Supabase Cloud (free) — schema pasted in SQL Editor, Edge Functions deployed via CLI
+#   - Render.com (free) — static site, build command: cd web-app && pnpm install && pnpm build
+#   - No Docker, no PostgreSQL installed locally
+#
+# Run setup.ps1 as Administrator to install everything at once.

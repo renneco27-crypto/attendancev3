@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Attendance",
+    "slug": "attendance-wrapper",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.attendance.wrapper",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.INTERNET"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.attendance.wrapper",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is needed to scan QR codes for attendance.",
+        "NSLocationWhenInUseUsageDescription": "Location is needed to verify you are in the classroom.",
+        "NSFaceIDUsageDescription": "Face ID is used to verify your identity for attendance."
+      }
+    },
+    "plugins": [
+      "expo-location"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+*.db
+*.db-shm
+*.db-wal
+.env
+.DS_Store
+*.log
+.vscode/
+.idea/
+Thumbs.db
+supabase/.temp/
