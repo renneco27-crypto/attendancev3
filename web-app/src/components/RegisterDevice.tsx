@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { supabase } from '../services/supabase'
 import { getDeviceId } from '../utils/device'
 
@@ -18,10 +18,59 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
   const [phase, setPhase] = useState<Phase>('form')
   const [message, setMessage] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [cameraActive, setCameraActive] = useState(false)
+  const [capturedSelfie, setCapturedSelfie] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 } })
+      streamRef.current = stream
+      setCameraActive(true)
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          videoRef.current.play()
+        }
+      }, 50)
+    } catch {
+      setErrorMsg('Camera access denied.')
+      setPhase('failed')
+    }
+  }
+
+  function captureSelfie() {
+    const video = videoRef.current
+    if (!video) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || 320
+    canvas.height = video.videoHeight || 240
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0)
+    setCapturedSelfie(canvas.toDataURL('image/jpeg', 0.7))
+    stopCamera()
+  }
+
+  function retakeSelfie() {
+    setCapturedSelfie(null)
+    startCamera()
+  }
+
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) videoRef.current.srcObject = null
+    setCameraActive(false)
+  }
 
   async function handleSubmit() {
     if (!name.trim() || pin.length !== 4 || pin !== pinConfirm) return
     if (!section) { setErrorMsg('Please select your section.'); setPhase('failed'); return }
+    if (!capturedSelfie) { setErrorMsg('Please take a selfie photo.'); return }
     setPhase('submitting')
     const deviceId = getDeviceId()
 
@@ -36,6 +85,24 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
       }
       const teacherId = teachers[0].auth_user_id
 
+      let facePhotoUrl = ''
+      try {
+        const b64 = capturedSelfie.split(',')[1]
+        const buf = Uint8Array.from(atob(b64), c => c.charCodeAt(0))
+        const fileName = `${deviceId}.jpg`
+        const { error: upErr } = await supabase()
+          .storage
+          .from('face-photos')
+          .upload(fileName, buf, { contentType: 'image/jpeg', upsert: true })
+        if (!upErr) {
+          const { data: urlData } = supabase()
+            .storage
+            .from('face-photos')
+            .getPublicUrl(fileName)
+          facePhotoUrl = urlData?.publicUrl || ''
+        }
+      } catch {}
+
       const { data: existing } = await supabase()
         .from('device_registrations')
         .select('id, status')
@@ -45,13 +112,14 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
       if (existing && existing.length > 0) {
         const row = existing[0]
         if (row.status === 'approved') {
+          stopCamera()
           setErrorMsg('This name already has an approved device.')
           setPhase('failed'); return
         }
         if (row.status === 'pending') {
           const { error: upErr } = await supabase()
             .from('device_registrations')
-            .update({ device_identifier: deviceId, pin, section })
+            .update({ device_identifier: deviceId, pin, section, face_photo_url: facePhotoUrl || null })
             .eq('id', row.id)
           if (upErr) {
             if (upErr.message?.includes('idx_device_registrations_uniq')) {
@@ -64,6 +132,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
           setMessage('Device registered! You can now scan attendance.')
           setPhase('success'); onRegistered(pin); return
         }
+        stopCamera()
         setErrorMsg('This registration was revoked. Ask your teacher to add you again.')
         setPhase('failed'); return
       }
@@ -77,6 +146,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
           section,
           teacher_id: teacherId,
           status: 'pending',
+          face_photo_url: facePhotoUrl || null,
         })
       if (insErr) {
         if (insErr.message?.includes('idx_device_registrations_uniq')) {
@@ -87,6 +157,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
         setPhase('failed'); return
       }
 
+      stopCamera()
       setMessage('Device registered! You can now scan attendance.')
       setPhase('success')
       onRegistered(pin)
@@ -115,7 +186,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
           <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.5)', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>← Back</button>
         </div>
         <h2 style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 24, fontWeight: 800, color: '#fff', marginBottom: 6 }}>Register Your Device</h2>
-        <p style={{ color: 'rgba(255,255,255,.5)', fontSize: 14, lineHeight: 1.6 }}>Submit your name and create a 4-digit PIN. Your teacher will approve your device.</p>
+        <p style={{ color: 'rgba(255,255,255,.5)', fontSize: 14, lineHeight: 1.6 }}>Submit your name, create a 4-digit PIN, and take a selfie. Your teacher will approve your device.</p>
       </div>
       <div className="reg-card">
         {phase === 'form' && (
@@ -136,8 +207,29 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
                 {SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
+            <div className="field">
+              <label>Selfie Photo</label>
+              {!cameraActive && !capturedSelfie && (
+                <button className="btn-ghost" onClick={startCamera} style={{ textAlign: 'center' }}>📸 Take Selfie</button>
+              )}
+              {cameraActive && (
+                <div>
+                  <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 12, background: '#000' }} />
+                  <button className="btn-primary" style={{ marginTop: 10 }} onClick={captureSelfie}>📸 Capture</button>
+                </div>
+              )}
+              {capturedSelfie && (
+                <div>
+                  <img src={capturedSelfie} alt="Selfie" style={{ width: '100%', borderRadius: 12 }} />
+                  <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                    <button className="btn-ghost" onClick={retakeSelfie}>Retake</button>
+                    <button className="btn-primary" onClick={() => {}} style={{ opacity: 0.6, cursor: 'default' }}>✓ Photo Set</button>
+                  </div>
+                </div>
+              )}
+            </div>
             {pinError() && <div style={{ color: 'var(--red)', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{pinError()}</div>}
-            <button className="btn-primary" onClick={handleSubmit} disabled={!name.trim() || pin.length !== 4 || pin !== pinConfirm || !section}>
+            <button className="btn-primary" onClick={handleSubmit} disabled={!name.trim() || pin.length !== 4 || pin !== pinConfirm || !section || !capturedSelfie}>
               Submit Registration
             </button>
           </div>

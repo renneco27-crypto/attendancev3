@@ -31,6 +31,15 @@ setInterval(() => {
   }
 }, 2 * 60 * 1000);
 
+setInterval(async () => {
+  const cutoff = new Date(Date.now() - 2 * 86400000).toISOString();
+  await supabase
+    .from('device_registrations')
+    .delete()
+    .lt('created_at', cutoff)
+    .in('status', ['pending', 'revoked']);
+}, 6 * 60 * 60 * 1000);
+
 function isSkinTone(r, g, b) {
   return r > 80 && g > 50 && b > 30 && r > g && r > b && (r - g) > 15;
 }
@@ -389,7 +398,7 @@ app.post('/api/submitAttendance', async (req, res) => {
       console.error('Supabase insert error:', insertError);
     }
 
-    res.json({ id, name, studentId, timestamp, status, liveness_score: livenessScore, reason });
+    res.json({ id, name, studentId, timestamp, status, liveness_score: livenessScore, reason, frameUrl });
   } catch (err) {
     console.error('Submit attendance error:', err);
     res.status(500).json({ error: 'Failed to submit attendance' });
@@ -528,6 +537,38 @@ app.post('/api/saveSettings', async (req, res) => {
   } catch (err) {
     console.error('Save settings error:', err);
     res.status(500).json({ error: 'Failed to save settings' });
+  }
+});
+
+app.post('/api/cleanupSessionPhotos', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ error: 'Missing sessionId' });
+
+    const { data: records } = await supabase
+      .from('attendance_records')
+      .select('face_frame_url')
+      .eq('session_id', sessionId)
+      .not('face_frame_url', 'is', null);
+
+    if (records) {
+      const names = records
+        .map(r => r.face_frame_url?.split('/').pop())
+        .filter(Boolean);
+      if (names.length) {
+        await supabase.storage.from('liveness-frames').remove(names);
+      }
+    }
+
+    await supabase
+      .from('attendance_records')
+      .update({ face_frame_url: null })
+      .eq('session_id', sessionId);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Cleanup photos error:', err);
+    res.status(500).json({ error: 'Cleanup failed' });
   }
 });
 

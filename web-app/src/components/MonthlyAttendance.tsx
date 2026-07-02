@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../services/supabase'
+import * as XLSX from 'xlsx'
 
 interface Props {
   selectedSection: string
@@ -91,22 +92,47 @@ export default function MonthlyAttendance({ selectedSection }: Props) {
   function prevMonth() { setDate(new Date(year, month - 1, 1)) }
   function nextMonth() { setDate(new Date(year, month + 1, 1)) }
 
-  function exportCsv() {
-    let csv = 'Student'
-    for (let d = 1; d <= daysInMonth; d++) csv += ',' + d
-    csv += '\n'
+  function exportExcel() {
+    const wsData: (string | number)[][] = []
+    const header: string[] = ['Student']
+    for (let d = 1; d <= daysInMonth; d++) header.push(String(d))
+    header.push('Total')
+    wsData.push(header)
+
     students.forEach(s => {
-      csv += '"' + s.student_name + '"'
+      let count = 0
+      const row: (string | number)[] = [s.student_name]
       for (let d = 1; d <= daysInMonth; d++) {
-        csv += present.has(s.student_id + '-' + d) ? ',✓' : ','
+        const p = present.has(s.student_id + '-' + d)
+        if (p) count++
+        row.push(p ? '✓' : '')
       }
-      csv += '\n'
+      row.push(`${count}/${daysInMonth}`)
+      wsData.push(row)
     })
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = selectedSection + '_' + monthLabel.replace(' ', '_') + '.csv'
-    a.click(); URL.revokeObjectURL(url)
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    ws['!cols'] = [{ wch: 25 }, ...Array(daysInMonth).fill({ wch: 5 }), { wch: 10 }]
+
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c })
+      if (!ws[addr]) continue
+      ws[addr].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1A3A6B' } }, alignment: { horizontal: 'center' } }
+    }
+    for (let r = 1; r <= range.e.r; r++) {
+      for (let c = 1; c < range.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c })
+        if (!ws[addr]) continue
+        const isPresent = ws[addr].v === '✓'
+        ws[addr].s = { fill: { fgColor: { rgb: isPresent ? 'E8F5EC' : 'F5F5F5' } }, alignment: { horizontal: 'center' } }
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance')
+    XLSX.writeFile(wb, selectedSection + '_' + monthLabel.replace(' ', '_') + '.xlsx')
   }
 
   function exportPdf() {
@@ -192,7 +218,7 @@ h3{margin-top:24px}
         </div>
         {selectedSection && students.length > 0 && (
           <div className="att-actions">
-            <button className="btn-small" onClick={exportCsv}>📥 Excel</button>
+            <button className="btn-small" onClick={exportExcel}>📥 Download Excel</button>
             <button className="btn-small" onClick={exportPdf}>📄 PDF</button>
             <button className="btn-small" onClick={handleUpload}>📤 Upload CSV</button>
             <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleFile} />

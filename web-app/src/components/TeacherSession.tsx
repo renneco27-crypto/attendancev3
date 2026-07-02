@@ -13,6 +13,7 @@ interface PendingRequest {
   student_name: string
   device_identifier: string
   created_at: string
+  face_photo_url?: string | null
 }
 
 interface Attendee {
@@ -20,6 +21,8 @@ interface Attendee {
   student_name: string
   scanned_at: string
   is_mock_location?: boolean
+  section?: string
+  face_frame_url?: string | null
 }
 
 type Tab = 'session' | 'registrations' | 'attendance'
@@ -82,21 +85,11 @@ export default function TeacherSession({ onLogout }: Props) {
       if (!existing) {
         await supabase().from('teachers').insert({ auth_user_id: user.id, name })
       }
-      cleanupOldPending()
       fetchPastClasses(user.id)
       fetchPending()
     } catch (e) {
       alert('Failed to initialize: ' + (e instanceof Error ? e.message : e))
     }
-  }
-
-  async function cleanupOldPending() {
-    const cutoff = new Date(Date.now() - 2 * 86400000).toISOString()
-    await supabase()
-      .from('device_registrations')
-      .delete()
-      .lt('created_at', cutoff)
-      .eq('device_identifier', '')
   }
 
   async function fetchPastClasses(uid: string) {
@@ -117,7 +110,7 @@ export default function TeacherSession({ onLogout }: Props) {
     const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString()
     let query = supabase()
       .from('device_registrations')
-      .select('id, student_name, device_identifier, created_at')
+      .select('id, student_name, device_identifier, created_at, face_photo_url')
       .eq('status', 'pending')
       .neq('device_identifier', '')
       .gte('created_at', twoDaysAgo)
@@ -188,7 +181,7 @@ export default function TeacherSession({ onLogout }: Props) {
       filter: `session_id=eq.${id}`,
     }, (payload: any) => {
       const r = payload.new
-      setAttendees(prev => [...prev, { id: r.id, student_name: r.student_name ?? 'Unknown', scanned_at: r.scanned_at, is_mock_location: r.is_mock_location ?? false }])
+      setAttendees(prev => [...prev, { id: r.id, student_name: r.student_name ?? 'Unknown', scanned_at: r.scanned_at, is_mock_location: r.is_mock_location ?? false, section: r.section || '', face_frame_url: r.face_frame_url || null }])
     })
     channel.on('postgres_changes', {
       event: 'DELETE', schema: 'public', table: 'attendance_records',
@@ -229,14 +222,17 @@ export default function TeacherSession({ onLogout }: Props) {
     if (rotationTimer.current) { clearInterval(rotationTimer.current); rotationTimer.current = null }
     if (channelRef.current) { channelRef.current.unsubscribe(); channelRef.current = null }
     setQrDataUrl('')
+    try { await fetch('/api/cleanupSessionPhotos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sid }) }) } catch {}
     await endSession(sid)
     sessionIdRef.current = null
     setPhase('ended')
   }
 
-  function handleNewSession() {
+  async function handleNewSession() {
+    const sid = sessionIdRef.current
     if (rotationTimer.current) { clearInterval(rotationTimer.current); rotationTimer.current = null }
     if (channelRef.current) { channelRef.current.unsubscribe(); channelRef.current = null }
+    if (sid) { try { await fetch('/api/cleanupSessionPhotos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sid }) }) } catch {} }
     sessionIdRef.current = null
     setSessionId(null)
     setQrDataUrl('')
@@ -345,9 +341,16 @@ export default function TeacherSession({ onLogout }: Props) {
               ) : (
                 attendees.slice(-20).map((a, i) => (
                   <div key={a.id} className="att-row">
-                    <div className="att-dot" />
+                    {a.face_frame_url ? (
+                      <div className="face-thumb-sm"><img src={a.face_frame_url} alt="" /></div>
+                    ) : (
+                      <div className="att-dot" />
+                    )}
                     <div className="att-num">{i + 1}</div>
-                    <div className="att-name">{a.student_name}</div>
+                    <div className="att-name">
+                      {a.student_name}
+                      {a.section && <span className="section-badge">{a.section}</span>}
+                    </div>
                     {a.is_mock_location && <span className="att-mock-icon" title="Fake GPS detected">⚠️</span>}
                     <div className="att-time">{new Date(a.scanned_at).toLocaleTimeString()}</div>
                     <button className="kick-btn" onClick={() => handleKick(a.id)}>Kick</button>
@@ -388,8 +391,14 @@ export default function TeacherSession({ onLogout }: Props) {
                   const l = livenessSummary[a.student_id || '']
                   return (
                     <div key={a.id} className="att-row">
+                      {a.face_frame_url ? (
+                        <div className="face-thumb-sm"><img src={a.face_frame_url} alt="" /></div>
+                      ) : null}
                       <div className="att-num">{i + 1}</div>
-                      <div className="att-name">{a.student_name}</div>
+                      <div className="att-name">
+                        {a.student_name}
+                        {a.section && <span className="section-badge">{a.section}</span>}
+                      </div>
                       {l ? (
                         <span className={`liveness-pill ${l.isLive ? 'lp-pass' : 'lp-fail'}`}>
                           {l.score}{l.isLive ? '✅' : '⚠️'}
@@ -418,8 +427,11 @@ export default function TeacherSession({ onLogout }: Props) {
               <div className="reg-list-card">
                 {pendingList.map(r => (
                   <div key={r.id} className="reg-row">
-                    <div className="reg-student-name">{r.student_name}</div>
-                    <div className="reg-device-id">Device: {r.device_identifier.slice(0, 12)}…</div>
+                    {r.face_photo_url ? <div className="reg-face-thumb"><img src={r.face_photo_url} alt="" /></div> : null}
+                    <div style={{ flex: 1 }}>
+                      <div className="reg-student-name">{r.student_name}</div>
+                      <div className="reg-device-id">Device: {r.device_identifier.slice(0, 12)}…</div>
+                    </div>
                     <div className="reg-actions">
                       <button className="approve-btn" onClick={() => handleApprove(r.id)}>✓ Approve</button>
                       <button className="reject-btn" onClick={() => handleReject(r.id)}>✖ Reject</button>

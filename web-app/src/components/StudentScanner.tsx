@@ -3,13 +3,14 @@ import { Html5Qrcode } from 'html5-qrcode'
 import { supabase } from '../services/supabase'
 import { getDeviceId } from '../utils/device'
 import { checkMockLocation } from '../utils/mockLocation'
+import { checkDeveloperOptions } from '../utils/developerOptions'
 
 interface Props {
   onBack: () => void
   pinValue: string
 }
 
-type ScanPhase = 'idle' | 'scanning' | 'liveness' | 'success' | 'fail' | 'geo-fail' | 'mock-fail' | 'liveness-timeout'
+type ScanPhase = 'idle' | 'scanning' | 'liveness' | 'success' | 'fail' | 'geo-fail' | 'mock-fail' | 'devopts-fail' | 'liveness-timeout'
 
 const SCANNER_ID = 'qr-scanner'
 const CAPTURE_WINDOW_MS = 10000
@@ -49,7 +50,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
   const livenessSessionIdRef = useRef<string>('')
   const noFaceSecondsRef = useRef(0)
   const noFaceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const capturedDataRef = useRef<{ sessionId: string; studentId: string; studentName: string; role: string } | null>(null)
+  const capturedDataRef = useRef<{ sessionId: string; studentId: string; studentName: string; role: string; section: string; faceFrameUrl?: string } | null>(null)
 
   useEffect(() => {
     return () => {
@@ -86,6 +87,8 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     finishingRef.current = false
     capturedRef.current = []
     setCapturedCount(0)
+    const { isDevOptionsOn } = await checkDeveloperOptions()
+    if (isDevOptionsOn) { setScanPhase('devopts-fail'); return }
     const { isMocked } = await checkMockLocation()
     if (isMocked) { setScanPhase('mock-fail'); return }
     setScanPhase('scanning')
@@ -223,7 +226,8 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       sessionId: last.session_id,
       studentId: devReg.student_id,
       studentName: devReg.student_name,
-      role: 'student'
+      role: 'student',
+      section: devReg.section || ''
     }
 
     try {
@@ -328,11 +332,13 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     setLivenessResult(livenessScore >= 60 ? 'pass' : 'fail')
 
     try {
-      await fetch(`${BACKEND_URL}/api/submitAttendance`, {
+      const resp = await fetch(`${BACKEND_URL}/api/submitAttendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: livenessSessionIdRef.current, qrSessionId: c.sessionId, qrData: c.studentId, role: c.role })
       })
+      const data = await resp.json()
+      if (data.frameUrl) c.faceFrameUrl = data.frameUrl
     } catch {}
 
     await supabase()
@@ -341,7 +347,8 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
         session_id: c.sessionId,
         student_id: c.studentId,
         student_name: c.studentName,
-        section: '',
+        section: c.section,
+        face_frame_url: c.faceFrameUrl || null,
         is_mock_location: false
       })
 
@@ -493,6 +500,18 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
           <div className="result-sub">Please turn off mock GPS / fake location apps and try again.</div>
           <div className="scanner-btns">
             <button className="btn-white" onClick={resetScanner}>Try Again</button>
+            <button className="btn-white-ghost" onClick={onBack}>Back</button>
+          </div>
+        </div>
+      )}
+
+      {scanPhase === 'devopts-fail' && (
+        <div className="devopts-warn-body">
+          <div className="result-icon fail" style={{ background: 'rgba(0,0,0,.2)', border: '2.5px solid rgba(255,255,255,.5)' }}>⚙️</div>
+          <div className="result-title">Developer Options Detected</div>
+          <div className="result-sub">Please turn off Developer Options and USB Debugging in your device settings to continue.</div>
+          <div className="scanner-btns">
+            <button className="btn-white" onClick={resetScanner}>I've Turned Them Off</button>
             <button className="btn-white-ghost" onClick={onBack}>Back</button>
           </div>
         </div>
