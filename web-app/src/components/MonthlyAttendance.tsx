@@ -12,11 +12,20 @@ interface StudentRow {
   student_name: string
 }
 
+interface HistoryEntry {
+  studentId: string
+  studentName: string
+  day: number
+  wasPresent: boolean
+}
+
 export default function MonthlyAttendance({ selectedSection }: Props) {
   const [date, setDate] = useState(new Date())
   const [students, setStudents] = useState<StudentRow[]>([])
   const [present, setPresent] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
+  const [undoStack, setUndoStack] = useState<HistoryEntry[]>([])
+  const [redoStack, setRedoStack] = useState<HistoryEntry[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const year = date.getFullYear()
@@ -61,11 +70,17 @@ export default function MonthlyAttendance({ selectedSection }: Props) {
     setLoading(false)
   }
 
-  async function toggle(studentId: string, studentName: string, day: number) {
+  async function toggleCell(studentId: string, studentName: string, day: number, newPresent: boolean) {
     const key = studentId + '-' + day
-    const isPresent = present.has(key)
-
-    if (isPresent) {
+    if (newPresent) {
+      const scannedAt = new Date(year, month, day, 12, 0, 0).toISOString()
+      await supabase()
+        .from('attendance_records')
+        .insert({ student_id: studentId, student_name: studentName, section: selectedSection, scanned_at: scannedAt })
+      const next = new Set(present)
+      next.add(key)
+      setPresent(next)
+    } else {
       const dayStart = new Date(year, month, day).toISOString()
       const dayEnd = new Date(year, month, day, 23, 59, 59).toISOString()
       await supabase()
@@ -78,15 +93,30 @@ export default function MonthlyAttendance({ selectedSection }: Props) {
       const next = new Set(present)
       next.delete(key)
       setPresent(next)
-    } else {
-      const scannedAt = new Date(year, month, day, 12, 0, 0).toISOString()
-      await supabase()
-        .from('attendance_records')
-        .insert({ student_id: studentId, student_name: studentName, section: selectedSection, scanned_at: scannedAt })
-      const next = new Set(present)
-      next.add(key)
-      setPresent(next)
     }
+  }
+
+  async function toggle(studentId: string, studentName: string, day: number) {
+    const wasPresent = present.has(studentId + '-' + day)
+    setUndoStack(prev => [...prev, { studentId, studentName, day, wasPresent }])
+    setRedoStack([])
+    await toggleCell(studentId, studentName, day, !wasPresent)
+  }
+
+  async function undo() {
+    if (undoStack.length === 0) return
+    const entry = undoStack[undoStack.length - 1]
+    setUndoStack(prev => prev.slice(0, -1))
+    setRedoStack(prev => [...prev, entry])
+    await toggleCell(entry.studentId, entry.studentName, entry.day, entry.wasPresent)
+  }
+
+  async function redo() {
+    if (redoStack.length === 0) return
+    const entry = redoStack[redoStack.length - 1]
+    setRedoStack(prev => prev.slice(0, -1))
+    setUndoStack(prev => [...prev, entry])
+    await toggleCell(entry.studentId, entry.studentName, entry.day, !entry.wasPresent)
   }
 
   function prevMonth() { setDate(new Date(year, month - 1, 1)) }
@@ -218,6 +248,8 @@ h3{margin-top:24px}
         </div>
         {selectedSection && students.length > 0 && (
           <div className="att-actions">
+            <button className="btn-small" onClick={undo} disabled={undoStack.length === 0} style={{ opacity: undoStack.length === 0 ? 0.4 : 1 }}>↩ Undo</button>
+            <button className="btn-small" onClick={redo} disabled={redoStack.length === 0} style={{ opacity: redoStack.length === 0 ? 0.4 : 1 }}>↪ Redo</button>
             <button className="btn-small" onClick={exportExcel}>📥 Download Excel</button>
             <button className="btn-small" onClick={exportPdf}>📄 PDF</button>
             <button className="btn-small" onClick={handleUpload}>📤 Upload CSV</button>
