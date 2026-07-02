@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "node --max-old-space-size=300 node_modules/.bin/vite build"
+  }
+}

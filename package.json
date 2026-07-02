@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "cd web-app && pnpm install && pnpm build && cd ../backend && pnpm install",
+    "build": "cd web-app && pnpm install --prod=false && pnpm build && cd ../backend && pnpm install --prod",
     "start": "node backend/index.js",
     "dev": "node --watch backend/index.js"
   },

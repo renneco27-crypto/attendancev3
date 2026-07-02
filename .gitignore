@@ -1,5 +1,8 @@
 node_modules/
+web-app/node_modules/
+backend/node_modules/
 dist/
+web-app/dist/
 build/
 *.db
 *.db-shm
