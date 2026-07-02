@@ -9,7 +9,7 @@ interface Props {
   pinValue: string
 }
 
-type ScanPhase = 'idle' | 'scanning' | 'success' | 'fail' | 'geo-fail' | 'mock-fail'
+type ScanPhase = 'idle' | 'scanning' | 'liveness' | 'success' | 'fail' | 'geo-fail' | 'mock-fail' | 'liveness-timeout'
 
 const SCANNER_ID = 'qr-scanner'
 const CAPTURE_WINDOW_MS = 10000
@@ -26,25 +26,47 @@ interface QrPayload {
   rotation_key: string
 }
 
+const BACKEND_URL = '' // relative, same origin
+
 export default function StudentScanner({ onBack, pinValue }: Props) {
   const [scanPhase, setScanPhase] = useState<ScanPhase>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [geoText, setGeoText] = useState('Checking location…')
   const [capturedCount, setCapturedCount] = useState(0)
+  const [livenessPrompt, setLivenessPrompt] = useState('')
+  const [livenessScore, setLivenessScore] = useState(0)
+  const [livenessReason, setLivenessReason] = useState('')
+  const [livenessProgress, setLivenessProgress] = useState(0)
+  const [livenessResult, setLivenessResult] = useState<'scanning' | 'pass' | 'fail'>('scanning')
+  const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false)
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const capturedRef = useRef<QrPayload[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const finishingRef = useRef(false)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const captureTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const livenessSessionIdRef = useRef<string>('')
+  const noFaceSecondsRef = useRef(0)
+  const noFaceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const capturedDataRef = useRef<{ sessionId: string; studentId: string; studentName: string; role: string } | null>(null)
 
   useEffect(() => {
-    //checkGeo() // geo check disabled for testing
-    return () => { stopScanner(); if (timerRef.current) clearTimeout(timerRef.current) }
+    return () => {
+      stopScanner()
+      stopFrontCamera()
+      if (timerRef.current) clearTimeout(timerRef.current)
+      if (captureTimerRef.current) clearInterval(captureTimerRef.current)
+      if (noFaceTimerRef.current) clearInterval(noFaceTimerRef.current)
+    }
   }, [])
 
   useEffect(() => {
-    if (scanPhase === 'scanning') {
-      startCamera()
-    }
+    if (scanPhase === 'scanning') startCamera()
+  }, [scanPhase])
+
+  useEffect(() => {
+    if (scanPhase === 'liveness') startLivenessCapture()
   }, [scanPhase])
 
   function checkGeo() {
@@ -72,7 +94,6 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
   async function startCamera() {
     const scanner = new Html5Qrcode(SCANNER_ID)
     scannerRef.current = scanner
-
     try {
       await scanner.start(
         { facingMode: 'environment' },
@@ -94,12 +115,9 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       const sid = data.session_id || data.s
       const rk = data.rotation_key || data.t
       if (!sid || !rk) return
-
       if (capturedRef.current.some(c => c.rotation_key === rk)) return
-
       capturedRef.current.push({ session_id: sid, rotation_key: rk })
       setCapturedCount(capturedRef.current.length)
-
       if (capturedRef.current.length >= 2) {
         if (timerRef.current) clearTimeout(timerRef.current)
         finishCapture()
@@ -196,24 +214,154 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       .maybeSingle()
 
     if (existing) {
-      setErrorMsg('You have already checked in for this session.')
-      setScanPhase('fail'); return
+      setAlreadyCheckedIn(true)
+      setScanPhase('success')
+      return
     }
 
-    const { error: insErr } = await supabase()
-      .from('attendance_records')
-      .insert({ session_id: last.session_id, student_id: devReg.student_id, student_name: devReg.student_name, section: devReg.section, is_mock_location: false })
-
-    if (insErr) {
-      setErrorMsg('Server error. Try again.')
-      setScanPhase('fail'); return
+    capturedDataRef.current = {
+      sessionId: last.session_id,
+      studentId: devReg.student_id,
+      studentName: devReg.student_name,
+      role: 'student'
     }
 
-    setScanPhase('success')
+    try {
+      const resp = await fetch(`${BACKEND_URL}/api/startLivenessSession`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: 'student',
+          studentId: devReg.student_id,
+          studentName: devReg.student_name
+        })
+      })
+      const data = await resp.json()
+      if (data.sessionId) {
+        livenessSessionIdRef.current = data.sessionId
+        setLivenessPrompt(data.prompt.instruction)
+        setScanPhase('liveness')
+      } else {
+        setErrorMsg('Liveness check unavailable.')
+        setScanPhase('fail')
+      }
+    } catch {
+      setErrorMsg('Liveness check unavailable.')
+      setScanPhase('fail')
+    }
   }
 
   async function stopScanner() {
     try { if (scannerRef.current) { await scannerRef.current.stop(); scannerRef.current.clear() } } catch {}
+  }
+
+  async function startLivenessCapture() {
+    setLivenessResult('scanning')
+    setLivenessProgress(0)
+    setLivenessScore(0)
+    setLivenessReason('')
+    noFaceSecondsRef.current = 0
+    frameCountRef.current = 0
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 } })
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
+      }
+    } catch {
+      setErrorMsg('Front camera access denied.')
+      setScanPhase('fail')
+      return
+    }
+
+    noFaceTimerRef.current = setInterval(() => {
+      noFaceSecondsRef.current++
+      if (noFaceSecondsRef.current >= 5) {
+        cleanupLiveness()
+        setScanPhase('liveness-timeout')
+      }
+    }, 1000)
+
+    captureTimerRef.current = setInterval(captureLivenessFrame, 800)
+  }
+
+  const frameCountRef = useRef(0)
+
+  async function captureLivenessFrame() {
+    if (!videoRef.current || livenessResult !== 'scanning') return
+
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.current.videoWidth || 320
+    canvas.height = videoRef.current.videoHeight || 240
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(videoRef.current, 0, 0)
+    const b64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1]
+
+    frameCountRef.current++
+    setLivenessProgress(frameCountRef.current)
+
+    try {
+      const resp = await fetch(`${BACKEND_URL}/api/sendFrameForAnalysis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: livenessSessionIdRef.current, frameBase64: b64 })
+      })
+      const data = await resp.json()
+      setLivenessScore(data.score)
+      setLivenessReason(data.reason)
+      if (data.isLive) noFaceSecondsRef.current = 0
+    } catch {}
+
+    if (frameCountRef.current >= 6) {
+      finishLiveness()
+    }
+  }
+
+  async function finishLiveness() {
+    cleanupLiveness()
+    const c = capturedDataRef.current
+    if (!c) { setScanPhase('success'); return }
+
+    setLivenessResult(livenessScore >= 60 ? 'pass' : 'fail')
+
+    try {
+      await fetch(`${BACKEND_URL}/api/submitAttendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: livenessSessionIdRef.current, qrData: c.studentId, role: c.role })
+      })
+    } catch {}
+
+    await supabase()
+      .from('attendance_records')
+      .insert({
+        session_id: c.sessionId,
+        student_id: c.studentId,
+        student_name: c.studentName,
+        section: '',
+        is_mock_location: false
+      })
+
+    setTimeout(() => setScanPhase('success'), 800)
+  }
+
+  function cleanupLiveness() {
+    if (captureTimerRef.current) { clearInterval(captureTimerRef.current); captureTimerRef.current = null }
+    if (noFaceTimerRef.current) { clearInterval(noFaceTimerRef.current); noFaceTimerRef.current = null }
+    stopFrontCamera()
+  }
+
+  function stopFrontCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
   }
 
   function resetScanner() {
@@ -221,6 +369,12 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     capturedRef.current = []
     setCapturedCount(0)
     setErrorMsg('')
+    setAlreadyCheckedIn(false)
+    setLivenessPrompt('')
+    setLivenessScore(0)
+    setLivenessReason('')
+    setLivenessProgress(0)
+    setLivenessResult('scanning')
     setScanPhase('idle')
     checkGeo()
   }
@@ -230,7 +384,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       <div className="scanner-topbar">
         <div className="tb-logo-img"><img src="/photo_2.webp" alt="ACLC Ormoc" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
         <div className="tb-brand" style={{ fontSize: 15, fontWeight: 800 }}>
-          {scanPhase === 'success' ? 'Attendance Recorded!' : scanPhase === 'fail' ? 'Scan Failed' : 'QR Scanner'}
+          {scanPhase === 'success' ? 'Attendance Recorded!' : scanPhase === 'fail' ? 'Scan Failed' : scanPhase === 'liveness' || scanPhase === 'liveness-timeout' ? 'Face Check' : 'QR Scanner'}
           <span>ACLC Ormoc · Attendance</span>
         </div>
       </div>
@@ -266,11 +420,42 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
         </div>
       )}
 
+      {(scanPhase === 'liveness' || scanPhase === 'liveness-timeout') && (
+        <div className="liveness-body">
+          {scanPhase === 'liveness' && (
+            <>
+              <div className="liveness-prompt">{livenessPrompt}</div>
+              <div className="liveness-video-wrap">
+                <video ref={videoRef} autoPlay playsInline muted />
+              </div>
+              <div className="liveness-bar-wrap">
+                <div className="liveness-bar">
+                  <div className="liveness-bar-fill" style={{ width: `${Math.min(livenessScore, 100)}%` }} />
+                </div>
+                <div className="liveness-bar-label">{livenessScore}/100 · {livenessReason || 'Analyzing…'}</div>
+              </div>
+              <div className="liveness-status">Scanning face… ({livenessProgress}/6)</div>
+            </>
+          )}
+          {scanPhase === 'liveness-timeout' && (
+            <>
+              <div className="result-icon fail">⏰</div>
+              <div className="result-title">No Face Detected</div>
+              <div className="result-sub">No face was detected in the camera. Please try again.</div>
+              <div className="scanner-btns">
+                <button className="btn-white" onClick={resetScanner}>Try Again</button>
+                <button className="btn-white-ghost" onClick={onBack}>Back</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {scanPhase === 'success' && (
         <div className="scanner-body">
           <div className="result-icon success">✅</div>
-          <div className="result-title">Attendance Recorded!</div>
-          <div className="result-sub">Your attendance has been logged.</div>
+          <div className="result-title">{alreadyCheckedIn ? 'Already Checked In' : 'Attendance Recorded!'}</div>
+          <div className="result-sub">{alreadyCheckedIn ? 'You have already checked in for this session.' : 'Your attendance has been logged.'}</div>
           <div className="scanner-btns">
             <button className="btn-white" onClick={resetScanner}>Done</button>
           </div>

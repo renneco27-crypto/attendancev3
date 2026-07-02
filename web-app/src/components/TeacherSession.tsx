@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import QRCode from 'qrcode'
 import { supabase } from '../services/supabase'
 import { createSession, endSession, rotateSessionKey, revokeDevice, kickFromSession } from '../services/api'
-import { resetSupabaseClient } from '../services/supabase'
 import MonthlyAttendance from './MonthlyAttendance'
 
 interface Props {
@@ -16,13 +15,6 @@ interface PendingRequest {
   created_at: string
 }
 
-interface RosterEntry {
-  id: string
-  student_name: string
-  created_at: string
-  status: string
-}
-
 interface Attendee {
   id: string
   student_name: string
@@ -30,7 +22,7 @@ interface Attendee {
   is_mock_location?: boolean
 }
 
-type Tab = 'session' | 'registrations' | 'roster' | 'attendance'
+type Tab = 'session' | 'registrations' | 'attendance'
 
 export default function TeacherSession({ onLogout }: Props) {
   const [teacherId, setTeacherId] = useState('')
@@ -44,8 +36,6 @@ export default function TeacherSession({ onLogout }: Props) {
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [pendingList, setPendingList] = useState<PendingRequest[]>([])
   const [tab, setTab] = useState<Tab>('session')
-  const [newStudentName, setNewStudentName] = useState('')
-  const [roster, setRoster] = useState<RosterEntry[]>([])
   interface PastClass { id: string; class_name: string }
   const [pastClasses, setPastClasses] = useState<PastClass[]>([])
   const [selectedChip, setSelectedChip] = useState('')
@@ -78,7 +68,6 @@ export default function TeacherSession({ onLogout }: Props) {
       }
       cleanupOldPending()
       fetchPastClasses(user.id)
-      fetchRoster()
       fetchPending()
     } catch (e) {
       alert('Failed to initialize: ' + (e instanceof Error ? e.message : e))
@@ -108,18 +97,6 @@ export default function TeacherSession({ onLogout }: Props) {
     }
   }
 
-  async function fetchRoster(section?: string) {
-    let query = supabase()
-      .from('device_registrations')
-      .select('id, student_name, created_at, status')
-      .neq('status', 'revoked')
-    const s = section !== undefined ? section : selectedSection
-    if (s) query = query.eq('section', s)
-    const { data, error } = await query.order('created_at', { ascending: false })
-    if (error) console.error('fetchRoster error:', error.message)
-    if (data) setRoster(data as RosterEntry[])
-  }
-
   async function fetchPending(section?: string) {
     const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString()
     let query = supabase()
@@ -146,29 +123,6 @@ export default function TeacherSession({ onLogout }: Props) {
   async function handleReject(requestId: string) {
     const ok = await revokeDevice(requestId)
     if (ok) fetchPending()
-  }
-
-  async function handleAddStudent() {
-    if (!newStudentName.trim()) return
-    const name = newStudentName.trim()
-    let query = supabase()
-      .from('device_registrations')
-      .select('id')
-      .eq('student_name', name)
-      .neq('status', 'revoked')
-    if (selectedSection) query = query.eq('section', selectedSection)
-    const { data: existing } = await query.maybeSingle()
-    if (existing) { alert('Student "' + name + '" is already in the roster.'); return }
-    const { error } = await supabase()
-      .from('device_registrations')
-      .insert({ student_name: name, device_identifier: '', status: 'pending', section: selectedSection || '' })
-    if (!error) { setNewStudentName(''); fetchRoster() }
-    else { alert('Failed to add student: ' + error.message) }
-  }
-
-  async function handleRemoveStudent(deviceRegistrationId: string) {
-    const ok = await revokeDevice(deviceRegistrationId)
-    if (ok) fetchRoster()
   }
 
   async function handleKick(attendanceRecordId: string) {
@@ -294,13 +248,12 @@ export default function TeacherSession({ onLogout }: Props) {
         <div className="teacher-tabs">
           <button className={`tab-btn ${tab === 'session' ? 'active' : ''}`} onClick={() => setTab('session')}>Session</button>
           <button className={`tab-btn ${tab === 'registrations' ? 'active' : ''}`} onClick={() => { setTab('registrations'); fetchPending() }}>Registrations</button>
-          <button className={`tab-btn ${tab === 'roster' ? 'active' : ''}`} onClick={() => { setTab('roster'); fetchRoster() }}>Roster</button>
           <button className={`tab-btn ${tab === 'attendance' ? 'active' : ''}`} onClick={() => setTab('attendance')}>Attendance</button>
         </div>
         <div className="section-row">
           <span className="section-label">Section:</span>
           <select className="section-select" value={selectedSection}
-            onChange={e => { const s = e.target.value; setSelectedSection(s); fetchRoster(s); fetchPending(s) }}>
+            onChange={e => { const s = e.target.value; setSelectedSection(s); fetchPending(s) }}>
             <option value="">All Sections</option>
             {SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -429,40 +382,6 @@ export default function TeacherSession({ onLogout }: Props) {
                       <button className="approve-btn" onClick={() => handleApprove(r.id)}>✓ Approve</button>
                       <button className="reject-btn" onClick={() => handleReject(r.id)}>✖ Reject</button>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── ROSTER TAB ── */}
-        <div className={`tab-panel ${tab === 'roster' ? 'active' : ''}`} id="tab-roster">
-          <div style={{ padding: '20px 16px 40px' }}>
-            <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 18, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Student Roster</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>Manage registered students for this class.</div>
-            <div className="roster-add">
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--sub)', textTransform: 'uppercase', letterSpacing: '.09em', marginBottom: 4 }}>Add a Student</div>
-              <div className="roster-add-row">
-                <input type="text" placeholder="Full student name" value={newStudentName} onChange={e => setNewStudentName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddStudent() }} />
-                <button className="add-btn" onClick={handleAddStudent}>Add</button>
-              </div>
-            </div>
-            <div className="section-title">Registered Students</div>
-            {roster.length === 0 ? (
-              <div className="att-empty">No students registered yet.</div>
-            ) : (
-              <div className="roster-list">
-                {roster.map(r => (
-                  <div key={r.id} className="roster-row">
-                    <div className="roster-info">
-                      <div className="roster-name">{r.student_name}</div>
-                      <div className="roster-date">Registered {new Date(r.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
-                    </div>
-                    <span className={`status-pill ${r.status === 'approved' ? 'sp-approved' : r.status === 'pending' ? 'sp-pending' : 'sp-revoked'}`}>
-                      {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                    </span>
-                    <button className="remove-btn" onClick={() => handleRemoveStudent(r.id)}>Delete</button>
                   </div>
                 ))}
               </div>
