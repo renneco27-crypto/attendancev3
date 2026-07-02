@@ -25,7 +25,7 @@ interface Attendee {
   face_frame_url?: string | null
 }
 
-type Tab = 'session' | 'registrations' | 'attendance'
+type Tab = 'session' | 'registrations' | 'attendance' | 'roster'
 
 export default function TeacherSession({ onLogout }: Props) {
   const [teacherId, setTeacherId] = useState('')
@@ -48,6 +48,8 @@ export default function TeacherSession({ onLogout }: Props) {
   const rotationTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const channelRef = useRef<any>(null)
   const [livenessSummary, setLivenessSummary] = useState<Record<string, { score: number; isLive: boolean }>>({})
+  const [rosterList, setRosterList] = useState<PendingRequest[]>([])
+  const [previewImageUrl, setPreviewImageUrl] = useState('')
 
   useEffect(() => { init(); return () => cleanup() }, [])
 
@@ -119,6 +121,18 @@ export default function TeacherSession({ onLogout }: Props) {
     const { data, error } = await query.order('created_at', { ascending: false })
     if (error) console.error('fetchPending error:', error.message)
     if (data) setPendingList(data as PendingRequest[])
+  }
+
+  async function fetchRoster(section?: string) {
+    let query = supabase()
+      .from('device_registrations')
+      .select('id, student_name, device_identifier, created_at, face_photo_url')
+      .eq('status', 'approved')
+      .neq('device_identifier', '')
+    const s = section !== undefined ? section : selectedSection
+    if (s) query = query.eq('section', s)
+    const { data } = await query.order('student_name', { ascending: true })
+    if (data) setRosterList(data as PendingRequest[])
   }
 
   async function handleApprove(requestId: string) {
@@ -260,6 +274,7 @@ export default function TeacherSession({ onLogout }: Props) {
         <div className="teacher-tabs">
           <button className={`tab-btn ${tab === 'session' ? 'active' : ''}`} onClick={() => setTab('session')}>Session</button>
           <button className={`tab-btn ${tab === 'registrations' ? 'active' : ''}`} onClick={() => { setTab('registrations'); fetchPending() }}>Registrations</button>
+          <button className={`tab-btn ${tab === 'roster' ? 'active' : ''}`} onClick={() => { setTab('roster'); fetchRoster() }}>Roster</button>
           <button className={`tab-btn ${tab === 'attendance' ? 'active' : ''}`} onClick={() => setTab('attendance')}>Attendance</button>
         </div>
         <div className="section-row">
@@ -342,7 +357,7 @@ export default function TeacherSession({ onLogout }: Props) {
                 attendees.slice(-20).map((a, i) => (
                   <div key={a.id} className="att-row">
                     {a.face_frame_url ? (
-                      <div className="face-thumb-sm"><img src={a.face_frame_url} alt="" /></div>
+                      <div className="face-thumb-sm" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(a.face_frame_url || '')}><img src={a.face_frame_url} alt="" /></div>
                     ) : (
                       <div className="att-dot" />
                     )}
@@ -392,7 +407,7 @@ export default function TeacherSession({ onLogout }: Props) {
                   return (
                     <div key={a.id} className="att-row">
                       {a.face_frame_url ? (
-                        <div className="face-thumb-sm"><img src={a.face_frame_url} alt="" /></div>
+                        <div className="face-thumb-sm" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(a.face_frame_url || '')}><img src={a.face_frame_url} alt="" /></div>
                       ) : null}
                       <div className="att-num">{i + 1}</div>
                       <div className="att-name">
@@ -443,11 +458,45 @@ export default function TeacherSession({ onLogout }: Props) {
           </div>
         </div>
 
+        {/* ── ROSTER TAB ── */}
+        <div className={`tab-panel ${tab === 'roster' ? 'active' : ''}`} id="tab-roster">
+          <div style={{ padding: '20px 16px 40px' }}>
+            <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 18, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Student Roster</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>Approved registered students.</div>
+            {rosterList.length === 0 ? (
+              <div className="att-empty">No approved students yet.</div>
+            ) : (
+              <div className="reg-list-card">
+                {rosterList.map(r => (
+                  <div key={r.id} className="reg-row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    {r.face_photo_url ?
+                      <div className="reg-face-thumb" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(r.face_photo_url || '')}>
+                        <img src={r.face_photo_url} alt="" />
+                      </div> : <div className="reg-face-thumb" style={{ background: 'var(--off)', border: '2px solid var(--border)', width: 40, height: 40, borderRadius: '50%', flexShrink: 0 }} />}
+                    <div style={{ flex: 1 }}>
+                      <div className="reg-student-name">{r.student_name}</div>
+                      <div className="reg-device-id">Device: {r.device_identifier.slice(0, 12)}…</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* ── ATTENDANCE TAB ── */}
         <div className={`tab-panel ${tab === 'attendance' ? 'active' : ''}`} id="tab-attendance">
           <MonthlyAttendance selectedSection={selectedSection} />
         </div>
       </div>
+
+      {/* ── IMAGE PREVIEW OVERLAY ── */}
+      {previewImageUrl && (
+        <div className="img-preview-overlay" onClick={() => setPreviewImageUrl('')}>
+          <img src={previewImageUrl} alt="Preview" className="img-preview-full" />
+          <span className="img-preview-close">✕</span>
+        </div>
+      )}
     </>
   )
 }
