@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build --root web-app",
+    "build": "pnpm install --no-frozen-lockfile && pnpm exec vite build --root web-app",
     "start": "node backend/index.js",
     "dev": "node --watch backend/index.js"
   },
