@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import Database from 'better-sqlite3';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
@@ -15,34 +14,15 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const db = new Database(path.join(__dirname, 'attendance.db'));
-db.pragma('journal_mode = WAL');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS attendance_records (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    studentId TEXT,
-    role TEXT,
-    qrData TEXT,
-    timestamp TEXT,
-    status TEXT,
-    livenessScore INTEGER,
-    reason TEXT,
-    sessionId TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT
-  );
-`);
-
 const sessions = new Map();
 let livenessThreshold = 60;
 
-const savedThreshold = db.prepare('SELECT value FROM settings WHERE key = ?').get('livenessThreshold');
-if (savedThreshold) livenessThreshold = Number(savedThreshold.value);
+(async () => {
+  try {
+    const { data } = await supabase.from('settings').select('value').eq('key', 'livenessThreshold').single();
+    if (data) livenessThreshold = Number(data.value);
+  } catch {}
+})();
 
 setInterval(() => {
   const now = Date.now();
@@ -368,7 +348,7 @@ app.post('/api/submitAttendance', async (req, res) => {
       try {
         const frameBuf = Buffer.from(session.bestFrameBase64, 'base64');
         const fileName = `${sessionId}.jpg`;
-        const { data: uploadData, error: uploadError } = await supabase
+        const { error: uploadError } = await supabase
           .storage
           .from('liveness-frames')
           .upload(fileName, frameBuf, {
@@ -390,35 +370,23 @@ app.post('/api/submitAttendance', async (req, res) => {
       }
     }
 
-    try {
-      const { error: insertError } = await supabase
-        .from('liveness_logs')
-        .insert({
-          id,
-          student_id: studentId,
-          student_name: name,
-          role: role || 'student',
-          session_id: sessionId,
-          liveness_score: livenessScore,
-          is_live: livenessScore >= livenessThreshold,
-          reason,
-          frame_url: frameUrl,
-          status
-        });
+    const { error: insertError } = await supabase
+      .from('liveness_logs')
+      .insert({
+        id,
+        student_id: studentId,
+        student_name: name,
+        role: role || 'student',
+        session_id: sessionId,
+        liveness_score: livenessScore,
+        is_live: livenessScore >= livenessThreshold,
+        reason,
+        frame_url: frameUrl,
+        status
+      });
 
-      if (insertError) {
-        console.error('Supabase insert error, falling back to SQLite:', insertError);
-        db.prepare(`
-          INSERT INTO attendance_records (id, name, studentId, role, qrData, timestamp, status, livenessScore, reason, sessionId)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, name, studentId, role || 'student', qrData || '', timestamp, status, livenessScore, reason, sessionId);
-      }
-    } catch (supabaseErr) {
-      console.error('Supabase insert exception, falling back to SQLite:', supabaseErr);
-      db.prepare(`
-        INSERT INTO attendance_records (id, name, studentId, role, qrData, timestamp, status, livenessScore, reason, sessionId)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, name, studentId, role || 'student', qrData || '', timestamp, status, livenessScore, reason, sessionId);
+    if (insertError) {
+      console.error('Supabase insert error:', insertError);
     }
 
     res.json({ id, name, studentId, timestamp, status, liveness_score: livenessScore, reason });
@@ -437,11 +405,8 @@ app.get('/api/getFlaggedRecords', async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Supabase query error, falling back to SQLite:', error);
-      const records = db.prepare(
-        'SELECT * FROM attendance_records WHERE status = ? ORDER BY timestamp DESC'
-      ).all('suspicious');
-      return res.json(records);
+      console.error('Supabase query error:', error);
+      return res.status(500).json({ error: 'Failed to fetch flagged records' });
     }
 
     res.json(data || []);
@@ -540,18 +505,24 @@ app.post('/api/reviewRecord', async (req, res) => {
   }
 });
 
-app.post('/api/saveSettings', (req, res) => {
+app.post('/api/saveSettings', async (req, res) => {
   try {
     const { schoolName, locationEnabled, livenessThreshold: threshold } = req.body;
 
-    const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    const upserts = [];
 
-    if (schoolName !== undefined) upsert.run('schoolName', String(schoolName));
-    if (locationEnabled !== undefined) upsert.run('locationEnabled', String(locationEnabled));
+    if (schoolName !== undefined) {
+      upserts.push(supabase.from('settings').upsert({ key: 'schoolName', value: String(schoolName) }));
+    }
+    if (locationEnabled !== undefined) {
+      upserts.push(supabase.from('settings').upsert({ key: 'locationEnabled', value: String(locationEnabled) }));
+    }
     if (threshold !== undefined) {
-      upsert.run('livenessThreshold', String(threshold));
+      upserts.push(supabase.from('settings').upsert({ key: 'livenessThreshold', value: String(threshold) }));
       livenessThreshold = Number(threshold);
     }
+
+    await Promise.all(upserts);
 
     res.json({ success: true });
   } catch (err) {
