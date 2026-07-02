@@ -106,7 +106,7 @@ function computePixelDiff(frame1, frame2, width, height, channels, topY, botY, c
 }
 
 function scoreLiveness(session) {
-  let score = 30;
+  let score = 0;
   let reasons = [];
 
   const { prompt, faceXHistory, faceYHistory, frames } = session;
@@ -115,7 +115,7 @@ function scoreLiveness(session) {
   const faceYArr = faceYHistory.slice(-10);
 
   if (faceXArr.length < 3) {
-    return { isLive: false, score: 30, reason: 'Low liveness score (30/100)' };
+    return { isLive: false, score: 0, reason: 'Low liveness score (0/100)' };
   }
 
   const baselineX = (faceXArr[0] + faceXArr[1] + faceXArr[2]) / 3;
@@ -124,19 +124,19 @@ function scoreLiveness(session) {
 
   let dirScore = 0;
   if (prompt === 'left') {
-    if (drift < -0.08) { dirScore = 40; }
-    else if (drift < -0.04) { dirScore = 20; }
+    if (drift < -0.08) { dirScore = 50; }
+    else if (drift < -0.04) { dirScore = 25; }
     else { dirScore = 0; }
   } else if (prompt === 'right') {
-    if (drift > 0.08) { dirScore = 40; }
-    else if (drift > 0.04) { dirScore = 20; }
+    if (drift > 0.08) { dirScore = 50; }
+    else if (drift > 0.04) { dirScore = 25; }
     else { dirScore = 0; }
   } else if (prompt === 'nod') {
     if (faceYArr.length >= 3) {
       const meanY = faceYArr.reduce((a, b) => a + b, 0) / faceYArr.length;
       const variance = faceYArr.reduce((a, b) => a + (b - meanY) ** 2, 0) / faceYArr.length;
-      if (variance > 0.06) dirScore = 40;
-      else if (variance > 0.03) dirScore = 20;
+      if (variance > 0.06) dirScore = 50;
+      else if (variance > 0.03) dirScore = 25;
       else dirScore = 0;
     }
   }
@@ -170,7 +170,7 @@ function scoreLiveness(session) {
     const avgDiff = diffCount > 0 ? totalDiff / diffCount : 0;
 
     if (avgDiff >= 2 && avgDiff <= 25) {
-      motionScore = 20;
+      motionScore = 25;
     } else if (avgDiff < 1) {
       motionScore = -20;
       reasons.push('No face movement across frames — possible printed photo');
@@ -186,7 +186,7 @@ function scoreLiveness(session) {
   if (lastAnalysis) {
     const ratio = lastAnalysis.skinPixelRatio;
     if (ratio > 0.25) {
-      score += 10;
+      score += 25;
     } else if (ratio < 0.10) {
       score -= 20;
       reasons.push('No face detected in frame');

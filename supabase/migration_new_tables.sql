@@ -55,6 +55,15 @@ exception when others then null;
 end;
 $$;
 
+-- ─── STORAGE BUCKETS ──────────────────────────────────────────────────────────
+insert into storage.buckets (id, name, public, avif_autodetection, file_size_limit, allowed_mime_types)
+values ('liveness-frames', 'liveness-frames', true, false, null, null)
+on conflict (id) do update set public = true;
+
+insert into storage.buckets (id, name, public, avif_autodetection, file_size_limit, allowed_mime_types)
+values ('face-photos', 'face-photos', true, false, null, null)
+on conflict (id) do update set public = true;
+
 -- ============================================================================
 -- ROW LEVEL SECURITY (teacher-owned, Edge Function writes bypass via service_role)
 -- ============================================================================
