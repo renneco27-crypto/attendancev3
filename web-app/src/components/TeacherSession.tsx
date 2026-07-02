@@ -44,8 +44,24 @@ export default function TeacherSession({ onLogout }: Props) {
   const [selectedSection, setSelectedSection] = useState('')
   const rotationTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const channelRef = useRef<any>(null)
+  const [livenessSummary, setLivenessSummary] = useState<Record<string, { score: number; isLive: boolean }>>({})
 
   useEffect(() => { init(); return () => cleanup() }, [])
+
+  useEffect(() => {
+    if (phase !== 'ended' || !sessionId) return
+    ;(async () => {
+      const { data } = await supabase()
+        .from('liveness_logs')
+        .select('student_id, liveness_score, is_live')
+        .eq('session_id', sessionId)
+      if (data) {
+        const map: Record<string, { score: number; isLive: boolean }> = {}
+        data.forEach(r => { map[r.student_id] = { score: r.liveness_score, isLive: r.is_live } })
+        setLivenessSummary(map)
+      }
+    })()
+  }, [phase])
 
   function cleanup() {
     if (rotationTimer.current) clearInterval(rotationTimer.current)
@@ -344,21 +360,47 @@ export default function TeacherSession({ onLogout }: Props) {
 
           {/* ENDED */}
           <div className={`session-phase ${phase !== 'ended' ? 'hidden' : ''}`} id="phase-ended">
-            <div style={{ textAlign: 'center', padding: '20px 0 24px' }}>
-              <div style={{ fontSize: 48, marginBottom: 12, animation: 'popIn .4s ease' }}>📊</div>
-              <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 20, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Session Ended</div>
-              <div style={{ fontSize: 13, color: 'var(--muted)' }}>{attendees.length} student{attendees.length !== 1 ? 's' : ''} attended</div>
+            <div className="summary-hero">
+              <div className="summary-icon">📊</div>
+              <div className="summary-title">Session Ended</div>
+              <div className="summary-class-name">{className}</div>
             </div>
+
+            <div className="summary-stats">
+              <div className="summary-stat">
+                <div className="stat-value">{attendees.length}</div>
+                <div className="stat-label">Checked In</div>
+              </div>
+              <div className="summary-stat">
+                <div className="stat-value">{Object.values(livenessSummary).filter(s => s.isLive).length}</div>
+                <div className="stat-label">Liveness Pass</div>
+              </div>
+              <div className="summary-stat">
+                <div className="stat-value">{attendees.length - Object.values(livenessSummary).filter(s => s.isLive).length}</div>
+                <div className="stat-label">No Liveness</div>
+              </div>
+            </div>
+
             {attendees.length > 0 && (
               <div className="att-table-card" style={{ marginBottom: 16 }}>
-                <div className="att-table-head"><h3>Final Attendance</h3><span className="count-badge">{attendees.length}</span></div>
-                {attendees.map((a, i) => (
-                  <div key={a.id} className="att-row">
-                    <div className="att-num">{i + 1}</div>
-                    <div className="att-name">{a.student_name}</div>
-                    <div className="att-time">{new Date(a.scanned_at).toLocaleTimeString()}</div>
-                  </div>
-                ))}
+                <div className="att-table-head"><h3>Attendance Record</h3><span className="count-badge">{attendees.length}</span></div>
+                {attendees.map((a, i) => {
+                  const l = livenessSummary[a.student_id || '']
+                  return (
+                    <div key={a.id} className="att-row">
+                      <div className="att-num">{i + 1}</div>
+                      <div className="att-name">{a.student_name}</div>
+                      {l ? (
+                        <span className={`liveness-pill ${l.isLive ? 'lp-pass' : 'lp-fail'}`}>
+                          {l.score}{l.isLive ? '✅' : '⚠️'}
+                        </span>
+                      ) : (
+                        <span className="liveness-pill lp-none">—</span>
+                      )}
+                      <div className="att-time">{new Date(a.scanned_at).toLocaleTimeString()}</div>
+                    </div>
+                  )
+                })}
               </div>
             )}
             <button className="btn-primary" onClick={handleNewSession}>+ New Session</button>

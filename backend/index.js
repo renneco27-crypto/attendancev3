@@ -311,7 +311,7 @@ app.post('/api/sendFrameForAnalysis', async (req, res) => {
 
 app.post('/api/submitAttendance', async (req, res) => {
   try {
-    const { sessionId, qrData, role } = req.body;
+    const { sessionId, qrData, role, qrSessionId } = req.body;
 
     if (!sessionId) {
       return res.status(400).json({ error: 'Missing sessionId' });
@@ -377,7 +377,7 @@ app.post('/api/submitAttendance', async (req, res) => {
         student_id: studentId,
         student_name: name,
         role: role || 'student',
-        session_id: sessionId,
+        session_id: qrSessionId || sessionId,
         liveness_score: livenessScore,
         is_live: livenessScore >= livenessThreshold,
         reason,

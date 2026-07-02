@@ -331,7 +331,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       await fetch(`${BACKEND_URL}/api/submitAttendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: livenessSessionIdRef.current, qrData: c.studentId, role: c.role })
+        body: JSON.stringify({ sessionId: livenessSessionIdRef.current, qrSessionId: c.sessionId, qrData: c.studentId, role: c.role })
       })
     } catch {}
 
