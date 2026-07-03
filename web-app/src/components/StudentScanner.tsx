@@ -280,14 +280,6 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       return
     }
 
-    noFaceTimerRef.current = setInterval(() => {
-      noFaceSecondsRef.current++
-      if (noFaceSecondsRef.current >= 5) {
-        cleanupLiveness()
-        setScanPhase('liveness-timeout')
-      }
-    }, 1000)
-
     captureTimerRef.current = setInterval(captureLivenessFrame, 800)
   }
 

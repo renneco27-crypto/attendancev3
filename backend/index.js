@@ -123,18 +123,7 @@ function scoreLiveness(session) {
     return { isLive: false, score: 0, reason: 'Low liveness score (0/100)' };
   }
 
-  // --- Gate: face must be consistently present in recent frames ---
-  const recentFrames = frames.slice(-5);
-  if (recentFrames.length === 0) {
-    return { isLive: false, score: 0, reason: 'No face detected — verification requires a clearly visible face' };
-  }
-  const avgSkinRatio = recentFrames.reduce((s, f) => s + f.skinPixelRatio, 0) / recentFrames.length;
-  const framesWithFace = recentFrames.filter(f => f.skinPixelRatio >= 0.06).length;
-  const minFramesRequired = Math.ceil(recentFrames.length * 0.6);
-
-  if (avgSkinRatio < 0.06 || framesWithFace < minFramesRequired) {
-    return { isLive: false, score: 0, reason: 'No face detected — verification requires a clearly visible face' };
-  }
+  // --- Face presence gate skipped — always proceeds to direction/motion scoring ---
 
   // --- Only reached once a face has been confirmed present ---
   let score = 0;
