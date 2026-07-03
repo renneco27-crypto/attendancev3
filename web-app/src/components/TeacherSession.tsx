@@ -490,7 +490,7 @@ export default function TeacherSession({ onLogout }: Props) {
                       <div className="reg-student-name">{r.student_name}</div>
                       <div className="reg-device-id">Device: {r.device_identifier.slice(0, 12)}…</div>
                     </div>
-                    <button className="reject-btn" onClick={() => handleRevoke(r.id)}>Revoke</button>
+                    <button className="reject-btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => handleRevoke(r.id)}>Revoke</button>
                   </div>
                 ))}
               </div>
