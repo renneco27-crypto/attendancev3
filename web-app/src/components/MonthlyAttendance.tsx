@@ -266,11 +266,11 @@ h3{margin-top:24px}
           </div>
         )}
         {showCsvInput && (
-          <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <textarea value={csvText} onChange={e => setCsvText(e.target.value)} rows={4}
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <textarea value={csvText} onChange={e => setCsvText(e.target.value)} rows={6}
               placeholder={`Name\n"Juan Dela Cruz"\n"Maria Santos"`}
-              style={{ flex: 1, minHeight: 80, resize: 'vertical', background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontFamily: 'monospace', color: 'var(--text)' }} />
-            <button className="btn-primary" onClick={() => { addStudentsFromCsv(csvText); setCsvText(''); setShowCsvInput(false) }} style={{ whiteSpace: 'nowrap', alignSelf: 'center' }}>Parse</button>
+              style={{ width: '100%', minHeight: 140, resize: 'vertical', background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', fontSize: 13, fontFamily: 'monospace', color: 'var(--text)', boxSizing: 'border-box' }} />
+            <button className="btn-primary" onClick={() => { addStudentsFromCsv(csvText); setCsvText(''); setShowCsvInput(false) }} style={{ alignSelf: 'flex-end' }}>Parse</button>
           </div>
         )}
       </div>
