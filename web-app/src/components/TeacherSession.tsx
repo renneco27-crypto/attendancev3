@@ -128,13 +128,18 @@ export default function TeacherSession({ onLogout }: Props) {
   async function fetchRoster(section?: string) {
     let query = supabase()
       .from('device_registrations')
-      .select('id, student_name, device_identifier, created_at, face_photo_url')
+      .select('id, student_name, device_identifier, created_at')
       .eq('status', 'approved')
       .neq('device_identifier', '')
     const s = section !== undefined ? section : selectedSection
     if (s) query = query.eq('section', s)
     const { data } = await query.order('student_name', { ascending: true })
     if (data) setRosterList(data as PendingRequest[])
+  }
+
+  async function handleRevoke(requestId: string) {
+    const ok = await revokeDevice(requestId)
+    if (ok) fetchRoster()
   }
 
   async function handleApprove(requestId: string) {
@@ -481,14 +486,11 @@ export default function TeacherSession({ onLogout }: Props) {
               <div className="reg-list-card">
                 {rosterList.map(r => (
                   <div key={r.id} className="reg-row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    {r.face_photo_url ?
-                      <div className="reg-face-thumb" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(r.face_photo_url || '')}>
-                        <img src={r.face_photo_url} alt="" />
-                      </div> : <div className="reg-face-thumb" style={{ background: 'var(--off)', border: '2px solid var(--border)', width: 40, height: 40, borderRadius: '50%', flexShrink: 0 }} />}
                     <div style={{ flex: 1 }}>
                       <div className="reg-student-name">{r.student_name}</div>
                       <div className="reg-device-id">Device: {r.device_identifier.slice(0, 12)}…</div>
                     </div>
+                    <button className="reject-btn" onClick={() => handleRevoke(r.id)}>Revoke</button>
                   </div>
                 ))}
               </div>
