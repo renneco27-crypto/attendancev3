@@ -27,6 +27,8 @@ export default function MonthlyAttendance({ selectedSection }: Props) {
   const [undoStack, setUndoStack] = useState<HistoryEntry[]>([])
   const [redoStack, setRedoStack] = useState<HistoryEntry[]>([])
   const [csvHelp, setCsvHelp] = useState(false)
+  const [showCsvInput, setShowCsvInput] = useState(false)
+  const [csvText, setCsvText] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const year = date.getFullYear()
@@ -203,10 +205,7 @@ h3{margin-top:24px}
     fileInputRef.current?.click()
   }
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const text = await file.text()
+  async function addStudentsFromCsv(text: string) {
     const lines = text.split('\n').filter(l => l.trim())
     if (lines.length < 2) { alert('CSV must have a header row and at least one student name.'); return }
     const names = lines.slice(1).map(l => l.split(',')[0].replace(/"/g, '').trim()).filter(n => n)
@@ -229,6 +228,13 @@ h3{margin-top:24px}
     }
     loadData()
     if (added > 0) alert(`Added ${added} new student(s) to ${selectedSection}.`)
+  }
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const text = await file.text()
+    await addStudentsFromCsv(text)
     e.target.value = ''
   }
 
@@ -255,7 +261,16 @@ h3{margin-top:24px}
             <button className="btn-small" onClick={exportPdf}>📄 PDF</button>
             <button className="btn-small" onClick={handleUpload}>📤 Upload CSV</button>
             <button className="btn-small" onClick={() => setCsvHelp(true)} style={{ minWidth: 32, padding: '4px 10px', fontWeight: 800, fontSize: 14 }}>?</button>
+            <button className="btn-small" onClick={() => setShowCsvInput(v => !v)}>{showCsvInput ? '✕ Close' : '✎ Paste CSV'}</button>
             <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleFile} />
+          </div>
+        )}
+        {showCsvInput && (
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <textarea value={csvText} onChange={e => setCsvText(e.target.value)} rows={4}
+              placeholder={`Name\n"Juan Dela Cruz"\n"Maria Santos"`}
+              style={{ flex: 1, minHeight: 80, resize: 'vertical', background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontFamily: 'monospace', color: 'var(--text)' }} />
+            <button className="btn-primary" onClick={() => { addStudentsFromCsv(csvText); setCsvText(''); setShowCsvInput(false) }} style={{ whiteSpace: 'nowrap', alignSelf: 'center' }}>Parse</button>
           </div>
         )}
       </div>
