@@ -151,6 +151,7 @@ export default function TeacherSession({ onLogout }: Props) {
     if (data) setRosterList(data as PendingRequest[])
   }
 
+  const [codeError, setCodeError] = useState('')
   const [editRosterId, setEditRosterId] = useState<string | null>(null)
   const [editEmail, setEditEmail] = useState('')
   const [editPName, setEditPName] = useState('')
@@ -185,7 +186,8 @@ export default function TeacherSession({ onLogout }: Props) {
 
   async function saveTeacherCode() {
     const code = teacherCode.trim().toUpperCase()
-    if (!code) return
+    if (code.length < 4) { setCodeError('Code must be at least 4 characters'); return }
+    setCodeError('')
     const { error } = await supabase()
       .from('teachers').update({ teacher_code: code })
       .eq('auth_user_id', teacherIdRef.current || teacherId)
@@ -347,12 +349,15 @@ export default function TeacherSession({ onLogout }: Props) {
             {teacherCode ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button onClick={() => setShowCodePopup(true)} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--green-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Saved</button>
-                <button onClick={() => { setTeacherCode(''); setShowCodePopup(false) }} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--gold-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Change</button>
+                <button onClick={() => { setTeacherCode(''); setShowCodePopup(false); setCodeError('') }} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--gold-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Change</button>
               </div>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input type="text" placeholder="Set teacher code" value={teacherCode} onChange={e => setTeacherCode(e.target.value.toUpperCase())} style={{ width: 110, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
-                <button onClick={saveTeacherCode} style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--green2)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="text" placeholder="Set teacher code" value={teacherCode} onChange={e => setTeacherCode(e.target.value.toUpperCase())} style={{ width: 110, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
+                  <button onClick={saveTeacherCode} style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--green2)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                </div>
+                {codeError && <div style={{ color: 'var(--red)', fontSize: 11, fontWeight: 600 }}>{codeError}</div>}
               </div>
             )}
             <button onClick={handleLogout} style={{ padding: '8px 14px', borderRadius: 10, background: 'var(--red-lt)', color: 'var(--red)', border: '1px solid #f5c0c0', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Logout</button>
