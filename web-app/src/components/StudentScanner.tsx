@@ -52,7 +52,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
   const livenessSessionIdRef = useRef<string>('')
   const noFaceSecondsRef = useRef(0)
   const noFaceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const capturedDataRef = useRef<{ sessionId: string; studentId: string; studentName: string; role: string; section: string; parentEmail?: string; faceFrameUrl?: string } | null>(null)
+  const capturedDataRef = useRef<{ sessionId: string; studentId: string; studentName: string; role: string; section: string; faceFrameUrl?: string } | null>(null)
 
   useEffect(() => {
     return () => {
@@ -191,7 +191,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     const deviceId = getDeviceId()
     const { data: devReg, error: devErr } = await supabase()
       .from('device_registrations')
-      .select('id, student_id, student_name, status, pin, section, parent_email')
+      .select('id, student_id, student_name, status, pin, section')
       .eq('device_identifier', deviceId)
       .eq('teacher_id', session.teacher_id)
       .single()
@@ -229,8 +229,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       studentId: devReg.student_id,
       studentName: devReg.student_name,
       role: 'student',
-      section: devReg.section || '',
-      parentEmail: devReg.parent_email || ''
+      section: devReg.section || ''
     }
 
     try {
@@ -351,9 +350,9 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
 
     setTimeout(() => setScanPhase('success'), 800)
 
-    if (inserted && c.parentEmail) {
+    if (inserted) {
       setEmailStatus('sending')
-      sendParentEmail(c.parentEmail, c.studentName, c.section, inserted.id)
+      sendParentEmail(c.studentId, inserted.id)
         .then(r => setEmailStatus(r.success ? 'sent' : 'failed'))
         .catch(() => setEmailStatus('failed'))
     }

@@ -8,23 +8,45 @@ interface EmailJsProvider {
   dailyLimit: number
 }
 
-const providers: EmailJsProvider[] = [
-  { name: 'emailjs_1', serviceId: '', templateId: '', publicKey: '', dailyLimit: 50 },
-  { name: 'emailjs_2', serviceId: '', templateId: '', publicKey: '', dailyLimit: 50 },
-  { name: 'emailjs_3', serviceId: '', templateId: '', publicKey: '', dailyLimit: 50 },
-  { name: 'emailjs_4', serviceId: '', templateId: '', publicKey: '', dailyLimit: 50 },
-  { name: 'emailjs_5', serviceId: '', templateId: '', publicKey: '', dailyLimit: 50 },
-]
+function loadProviders(): EmailJsProvider[] {
+  const keys = ['1', '2', '3'] as const
+  const providers: EmailJsProvider[] = []
+  for (const k of keys) {
+    const sid = import.meta.env[`VITE_EMAILJS_${k}_SERVICE_ID`] as string | undefined
+    const tid = import.meta.env[`VITE_EMAILJS_${k}_TEMPLATE_ID`] as string | undefined
+    const pk = import.meta.env[`VITE_EMAILJS_${k}_PUBLIC_KEY`] as string | undefined
+    if (sid && tid && pk) {
+      providers.push({ name: `emailjs_${k}`, serviceId: sid, templateId: tid, publicKey: pk, dailyLimit: 30 })
+    }
+  }
+  return providers
+}
+
+const providers = loadProviders()
 
 export async function sendParentEmail(
-  parentEmail: string,
-  studentName: string,
-  section: string,
+  studentId: string,
   attendanceId: string,
 ): Promise<{ success: boolean; provider?: string }> {
-  for (const p of providers) {
-    if (!p.serviceId || !p.templateId || !p.publicKey) continue
+  const { data: student } = await supabase()
+    .from('device_registrations')
+    .select('parent_email, parent_name, student_name')
+    .eq('student_id', studentId)
+    .maybeSingle()
 
+  if (!student || !student.parent_email) {
+    return { success: false }
+  }
+
+  const templateParams = {
+    to_email: student.parent_email,
+    parent_name: student.parent_name,
+    student_name: student.student_name,
+    school_name: 'ACLC Attendance',
+    timestamp: new Date().toLocaleString(),
+  }
+
+  for (const p of providers) {
     const { data: canSend } = await supabase()
       .rpc('increment_email_quota', { p_provider: p.name, p_limit: p.dailyLimit })
     if (!canSend) continue
@@ -37,13 +59,7 @@ export async function sendParentEmail(
           service_id: p.serviceId,
           template_id: p.templateId,
           user_id: p.publicKey,
-          template_params: {
-            to_email: parentEmail,
-            student_name: studentName,
-            school_name: 'ACLC Attendance',
-            timestamp: new Date().toLocaleString(),
-            section,
-          },
+          template_params: templateParams,
         }),
       })
 
@@ -60,5 +76,6 @@ export async function sendParentEmail(
     }
   }
 
+  console.error('All 3 EmailJS providers exhausted or failed')
   return { success: false }
 }

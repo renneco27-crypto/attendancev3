@@ -17,6 +17,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
   const [section, setSection] = useState('')
   const [sections, setSections] = useState<string[]>([])
   const [parentEmail, setParentEmail] = useState('')
+  const [parentName, setParentName] = useState('')
   const [phase, setPhase] = useState<Phase>('form')
   const [message, setMessage] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
@@ -62,7 +63,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
         if (row.status === 'pending') {
             const { error: upErr } = await supabase()
               .from('device_registrations')
-              .update({ device_identifier: deviceId, pin, section, parent_email: parentEmail || null })
+              .update({ device_identifier: deviceId, pin, section, parent_email: parentEmail, parent_name: parentName })
               .eq('id', row.id)
           if (upErr) {
             if (upErr.message?.includes('idx_device_registrations_uniq')) {
@@ -88,7 +89,8 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
           section,
           teacher_id: teacherId,
           status: 'pending',
-          parent_email: parentEmail || null,
+          parent_email: parentEmail,
+          parent_name: parentName,
         })
       if (insErr) {
         if (insErr.message?.includes('idx_device_registrations_uniq')) {
@@ -155,6 +157,10 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
             <div className="field">
               <label>Parent Email (optional)</label>
               <input type="email" placeholder="parent@example.com" value={parentEmail} onChange={e => setParentEmail(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Parent Name (optional)</label>
+              <input type="text" placeholder="e.g. Maria Dela Cruz" value={parentName} onChange={e => setParentName(e.target.value)} />
             </div>
             {pinError() && <div style={{ color: 'var(--red)', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{pinError()}</div>}
             <button className="btn-primary" onClick={handleSubmit} disabled={!name.trim() || pin.length !== 4 || pin !== pinConfirm || !section}>
