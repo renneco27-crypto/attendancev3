@@ -26,7 +26,7 @@ export default function MonthlyAttendance({ selectedSection }: Props) {
   const [loading, setLoading] = useState(false)
   const [undoStack, setUndoStack] = useState<HistoryEntry[]>([])
   const [redoStack, setRedoStack] = useState<HistoryEntry[]>([])
-  const [csvHelp, setCsvHelp] = useState(false)
+
   const [showCsvInput, setShowCsvInput] = useState(false)
   const [csvText, setCsvText] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -226,7 +226,7 @@ h3{margin-top:24px}
         added++
       }
     }
-    loadData()
+    await loadData()
     if (added > 0) alert(`Added ${added} new student(s) to ${selectedSection}.`)
   }
 
@@ -260,7 +260,6 @@ h3{margin-top:24px}
             <button className="btn-small" onClick={exportExcel}>📥 Download Excel</button>
             <button className="btn-small" onClick={exportPdf}>📄 PDF</button>
             <button className="btn-small" onClick={handleUpload}>📤 Upload CSV</button>
-            <button className="btn-small" onClick={() => setCsvHelp(true)} style={{ minWidth: 32, padding: '4px 10px', fontWeight: 800, fontSize: 14 }}>?</button>
             <button className="btn-small" onClick={() => setShowCsvInput(v => !v)}>{showCsvInput ? '✕ Close' : '✎ Paste CSV'}</button>
             <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleFile} />
           </div>
@@ -311,25 +310,6 @@ h3{margin-top:24px}
         </div>
       )}
 
-      {csvHelp && (
-        <div className="img-preview-overlay" onClick={() => setCsvHelp(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 16, padding: 28, maxWidth: 420, width: '90%', margin: '0 auto', position: 'relative', top: '20%' }}>
-            <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 18, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>CSV Format</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>Upload a .csv file with student names in the first column:</div>
-            <div style={{ background: 'var(--off)', borderRadius: 10, padding: 14, fontFamily: 'monospace', fontSize: 13, lineHeight: 1.8, color: 'var(--text)' }}>
-              Name<br />
-              "Juan Dela Cruz"<br />
-              "Maria Santos"<br />
-              "Jose Rizal"<br />
-              …
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 14, lineHeight: 1.5 }}>
-              First row is the header (skipped). Each row after adds a pending student registration under the selected section. Duplicate names are ignored.
-            </div>
-            <button className="btn-primary mt24" onClick={() => setCsvHelp(false)} style={{ width: '100%' }}>Got it</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
