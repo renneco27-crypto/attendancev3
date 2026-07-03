@@ -42,6 +42,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
   const [livenessResult, setLivenessResult] = useState<'scanning' | 'pass' | 'fail'>('scanning')
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false)
   const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle')
+
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const capturedRef = useRef<QrPayload[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -63,6 +64,8 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       if (noFaceTimerRef.current) clearInterval(noFaceTimerRef.current)
     }
   }, [])
+
+
 
   useEffect(() => {
     if (scanPhase === 'scanning') startCamera()
@@ -399,7 +402,6 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
           <span>ACLC Ormoc · Attendance</span>
         </div>
       </div>
-
       {scanPhase === 'idle' && (
         <div className="scanner-body">
           <div className="geo-check">📍 <span>{geoText}</span></div>
@@ -485,6 +487,17 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
           <div className="result-icon fail">✖</div>
           <div className="result-title">Scan Failed</div>
           <div className="result-sub">{errorMsg}</div>
+          {/* Failed attempts list */}
+          {failedAttempts.length > 0 && (
+            <div className="failed-section" style={{ marginTop: 8 }}>
+              <h4 style={{ margin: 0, fontSize: 14, color: 'var(--red)' }}>Failed Attempts</h4>
+              <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                {failedAttempts.map((msg, i) => (
+                  <li key={i} style={{ fontSize: 12, color: 'var(--red)' }}>{msg}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="scanner-btns">
             <button className="btn-white" onClick={resetScanner}>Try Again</button>
             <button className="btn-white-ghost" onClick={onBack}>Back</button>
