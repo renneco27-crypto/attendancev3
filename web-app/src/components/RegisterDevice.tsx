@@ -136,7 +136,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
           <div>
             <div className="field">
               <label>Teacher Code</label>
-              <input type="text" placeholder="e.g. SMITH" value={teacherCode} onChange={e => setTeacherCode(e.target.value.toUpperCase())} />
+              <input type="text" placeholder="e.g. SMITH" maxLength={4} value={teacherCode} onChange={e => setTeacherCode(e.target.value.toUpperCase().slice(0, 4))} />
             </div>
             <div className="field"><label>Full Name</label><input type="text" placeholder="e.g. Juan Dela Cruz" value={name} onChange={e => setName(e.target.value)} /></div>
             <div className="field">

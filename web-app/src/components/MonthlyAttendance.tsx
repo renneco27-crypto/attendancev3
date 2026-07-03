@@ -210,25 +210,63 @@ h3{margin-top:24px}
     if (lines.length < 2) { alert('CSV must have a header row and at least one student name.'); return }
     const names = lines.slice(1).map(l => l.split(',')[0].replace(/"/g, '').trim()).filter(n => n)
     if (!names.length) { alert('No student names found in CSV.'); return }
-    const { data: teachers } = await supabase().from('teachers').select('auth_user_id').limit(1)
+
+    const { data: teachers, error: teacherErr } = await supabase().from('teachers').select('auth_user_id').limit(1)
+    if (teacherErr) { alert('Failed to look up teacher: ' + teacherErr.message); return }
     const teacherId = teachers?.[0]?.auth_user_id
     if (!teacherId) { alert('No teacher configured.'); return }
+
     let added = 0
+    let skipped = 0
+    const failures: string[] = []
+
     for (const name of names) {
-      const { data: existing } = await supabase()
+      const { data: existing, error: lookupErr } = await supabase()
         .from('device_registrations')
-        .select('id').eq('student_name', name).eq('section', selectedSection)
-        .neq('status', 'revoked').maybeSingle()
-      if (!existing) {
-        const sid = 'csv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
-        await supabase().from('device_registrations').insert({
-          student_name: name, section: selectedSection, student_id: sid, device_identifier: '', status: 'pending',
+        .select('id')
+        .eq('student_name', name)
+        .eq('section', selectedSection)
+        .neq('status', 'revoked')
+        .maybeSingle()
+
+      if (lookupErr) {
+        failures.push(`${name} (lookup failed: ${lookupErr.message})`)
+        continue
+      }
+
+      if (existing) {
+        skipped++
+        continue
+      }
+
+      const sid = 'csv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+      const { error: insertErr } = await supabase()
+        .from('device_registrations')
+        .insert({
+          student_name: name,
+          section: selectedSection,
+          student_id: sid,
+          device_identifier: '',
+          status: 'pending',
+          teacher_id: teacherId,
         })
+
+      if (insertErr) {
+        failures.push(`${name} (${insertErr.message})`)
+      } else {
         added++
       }
     }
+
     await loadData()
-    if (added > 0) alert(`Added ${added} new student(s) to ${selectedSection}.`)
+
+    if (failures.length > 0) {
+      alert(`Added ${added} student(s), skipped ${skipped} duplicate(s).\n\nFailed (${failures.length}):\n${failures.join('\n')}`)
+    } else if (added > 0) {
+      alert(`Added ${added} new student(s) to ${selectedSection}.`)
+    } else {
+      alert(`No new students added — ${skipped} were already in ${selectedSection}.`)
+    }
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {

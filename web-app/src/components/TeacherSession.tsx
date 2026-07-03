@@ -189,11 +189,17 @@ export default function TeacherSession({ onLogout }: Props) {
   async function saveTeacherCode() {
     const code = teacherCode.trim().toUpperCase()
     if (code.length !== 4) { setCodeError('Code must be exactly 4 characters'); return }
+    const id = teacherIdRef.current || teacherId
+    if (!id) { setCodeError('Teacher session not ready — try again'); return }
     setCodeError('')
-    const { error } = await supabase()
+    const { data, error } = await supabase()
       .from('teachers').update({ teacher_code: code })
-      .eq('auth_user_id', teacherIdRef.current || teacherId)
-    if (!error) { setTeacherCode(code); setIsCodeSaved(true) }
+      .eq('auth_user_id', id)
+      .select()
+    if (error) { setCodeError('Save failed — try again'); return }
+    if (!data || data.length === 0) { setCodeError('No matching teacher record — contact support'); return }
+    setTeacherCode(code)
+    setIsCodeSaved(true)
   }
 
   async function handleKick(attendanceRecordId: string) {
@@ -356,7 +362,7 @@ export default function TeacherSession({ onLogout }: Props) {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input type="text" placeholder="Code" maxLength={4} value={teacherCode} onChange={e => { setTeacherCode(e.target.value.toUpperCase().replace(/\s/g, '')); if (codeError) setCodeError('') }} style={{ width: 70, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
+                  <input type="text" placeholder="Code" maxLength={4} value={teacherCode} onChange={e => { setTeacherCode(e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 4)); if (codeError) setCodeError('') }} style={{ width: 70, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
                   <button onClick={saveTeacherCode} disabled={teacherCode.trim().length !== 4} style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--green2)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: teacherCode.trim().length !== 4 ? 0.5 : 1 }}>Save</button>
                 </div>
                 {codeError && <div style={{ color: 'var(--red)', fontSize: 11, fontWeight: 600 }}>{codeError}</div>}
