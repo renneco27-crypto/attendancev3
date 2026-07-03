@@ -49,8 +49,8 @@ function rgbToYCbCr(r, g, b) {
 
 function isSkinTone(r, g, b) {
   const { y, cb, cr } = rgbToYCbCr(r, g, b);
-  if (y < 20 || y > 250) return false;
-  return cb >= 77 && cb <= 135 && cr >= 133 && cr <= 180;
+  if (y < 15 || y > 250) return false;
+  return cb >= 50 && cb <= 155 && cr >= 115 && cr <= 200;
 }
 
 async function analyzeFrame(frameBase64) {
@@ -125,14 +125,15 @@ function scoreLiveness(session) {
 
   // --- Gate: face must be consistently present in recent frames ---
   const recentFrames = frames.slice(-5);
-  if (recentFrames.length > 0) {
-    const avgSkinRatio = recentFrames.reduce((s, f) => s + f.skinPixelRatio, 0) / recentFrames.length;
-    const framesWithFace = recentFrames.filter(f => f.skinPixelRatio >= 0.12).length;
-    const minFramesRequired = Math.ceil(recentFrames.length * 0.6);
+  if (recentFrames.length === 0) {
+    return { isLive: false, score: 0, reason: 'No face detected — verification requires a clearly visible face' };
+  }
+  const avgSkinRatio = recentFrames.reduce((s, f) => s + f.skinPixelRatio, 0) / recentFrames.length;
+  const framesWithFace = recentFrames.filter(f => f.skinPixelRatio >= 0.06).length;
+  const minFramesRequired = Math.ceil(recentFrames.length * 0.6);
 
-    if (avgSkinRatio < 0.12 || framesWithFace < minFramesRequired) {
-      return { isLive: false, score: 0, reason: 'No face detected — verification requires a clearly visible face' };
-    }
+  if (avgSkinRatio < 0.06 || framesWithFace < minFramesRequired) {
+    return { isLive: false, score: 0, reason: 'No face detected — verification requires a clearly visible face' };
   }
 
   // --- Only reached once a face has been confirmed present ---

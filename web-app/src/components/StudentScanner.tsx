@@ -10,7 +10,7 @@ interface Props {
   pinValue: string
 }
 
-type ScanPhase = 'idle' | 'scanning' | 'liveness' | 'success' | 'fail' | 'geo-fail' | 'mock-fail' | 'devopts-fail' | 'liveness-timeout'
+type ScanPhase = 'idle' | 'scanning' | 'liveness' | 'success' | 'fail' | 'geo-fail' | 'mock-fail' | 'devopts-fail' | 'liveness-timeout' | 'liveness-fail'
 
 const SCANNER_ID = 'qr-scanner'
 const CAPTURE_WINDOW_MS = 10000
@@ -329,7 +329,13 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     const c = capturedDataRef.current
     if (!c) { setScanPhase('success'); return }
 
-    setLivenessResult(livenessScore >= 60 ? 'pass' : 'fail')
+    const passed = livenessScore >= 60
+    setLivenessResult(passed ? 'pass' : 'fail')
+
+    if (!passed) {
+      setScanPhase('liveness-fail')
+      return
+    }
 
     try {
       const resp = await fetch(`${BACKEND_URL}/api/submitAttendance`, {
@@ -391,7 +397,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       <div className="scanner-topbar">
         <div className="tb-logo-img"><img src="/photo_2.webp" alt="ACLC Ormoc" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
         <div className="tb-brand" style={{ fontSize: 15, fontWeight: 800 }}>
-          {scanPhase === 'success' ? 'Attendance Recorded!' : scanPhase === 'fail' ? 'Scan Failed' : scanPhase === 'liveness' || scanPhase === 'liveness-timeout' ? 'Face Check' : 'QR Scanner'}
+           {scanPhase === 'success' ? 'Attendance Recorded!' : scanPhase === 'fail' ? 'Scan Failed' : scanPhase === 'liveness' || scanPhase === 'liveness-timeout' || scanPhase === 'liveness-fail' ? 'Face Check' : 'QR Scanner'}
           <span>ACLC Ormoc · Attendance</span>
         </div>
       </div>
@@ -449,6 +455,18 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
               <div className="result-icon fail">⏰</div>
               <div className="result-title">No Face Detected</div>
               <div className="result-sub">No face was detected in the camera. Please try again.</div>
+              <div className="scanner-btns">
+                <button className="btn-white" onClick={resetScanner}>Try Again</button>
+                <button className="btn-white-ghost" onClick={onBack}>Back</button>
+              </div>
+            </>
+          )}
+
+          {scanPhase === 'liveness-fail' && (
+            <>
+              <div className="result-icon fail">✖</div>
+              <div className="result-title">Liveness Check Failed</div>
+              <div className="result-sub">{livenessReason || 'Could not verify liveness. Please try again.'}</div>
               <div className="scanner-btns">
                 <button className="btn-white" onClick={resetScanner}>Try Again</button>
                 <button className="btn-white-ghost" onClick={onBack}>Back</button>
