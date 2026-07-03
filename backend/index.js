@@ -185,11 +185,14 @@ function scoreLiveness(session) {
     reasons.push('Head turn not detected — possible static image');
   }
 
+  let actualDir = 'none';
+  if (dirScore > 0) actualDir = prompt === 'left' ? 'left' : prompt === 'right' ? 'right' : 'nod';
+
   const isLive = score >= livenessThreshold;
   if (!isLive && reasons.length === 0) reasons.push(`Low liveness score (${score}/100)`);
   if (isLive && reasons.length === 0) reasons = ['Verified — head turn confirmed'];
 
-  return { isLive, score, reason: reasons.join('; ') };
+  return { isLive, score, reason: reasons.join('; '), prompt, actualDir };
 }
 
 const app = express();
@@ -275,17 +278,19 @@ app.post('/api/sendFrameForAnalysis', async (req, res) => {
       session.frames = session.frames.slice(-10);
     }
 
-    const { isLive, score, reason } = scoreLiveness(session);
+    const { isLive, score, reason, prompt: lPrompt, actualDir } = scoreLiveness(session);
     session.lastScore = score;
     session.lastReason = reason;
+    session.lastPrompt = lPrompt;
+    session.lastActualDir = actualDir;
     session.scores.push(score);
 
-    if (score > session.bestScore) {
+    if (!session.bestFrameBase64 || score > session.bestScore) {
       session.bestScore = score;
       session.bestFrameBase64 = b64;
     }
 
-    res.json({ isLive, score, reason });
+    res.json({ isLive, score, reason, prompt: lPrompt, actualDir });
   } catch (err) {
     console.error('Frame analysis error:', err);
     res.status(500).json({ error: 'Frame analysis failed' });
@@ -303,6 +308,8 @@ app.post('/api/submitAttendance', async (req, res) => {
     const session = sessions.get(sessionId);
     const livenessScore = session ? session.lastScore : 0;
     const reason = session ? session.lastReason : '';
+    const livenessPrompt = session ? session.lastPrompt : '';
+    const livenessActualDir = session ? session.lastActualDir : '';
 
     let name = 'Unknown';
     let studentId = qrData || 'unknown';
@@ -365,14 +372,16 @@ app.post('/api/submitAttendance', async (req, res) => {
         is_live: livenessScore >= livenessThreshold,
         reason,
         frame_url: frameUrl,
-        status
+        status,
+        prompt: livenessPrompt,
+        detected_direction: livenessActualDir
       });
 
     if (insertError) {
       console.error('Supabase insert error:', insertError);
     }
 
-    res.json({ id, name, studentId, timestamp, status, liveness_score: livenessScore, reason, frameUrl });
+    res.json({ id, name, studentId, timestamp, status, liveness_score: livenessScore, reason, frameUrl, prompt: livenessPrompt, detected_direction: livenessActualDir });
   } catch (err) {
     console.error('Submit attendance error:', err);
     res.status(500).json({ error: 'Failed to submit attendance' });

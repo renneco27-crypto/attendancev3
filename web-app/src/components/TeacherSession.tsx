@@ -51,7 +51,7 @@ export default function TeacherSession({ onLogout }: Props) {
   const [livenessSummary, setLivenessSummary] = useState<Record<string, { score: number; isLive: boolean }>>({})
   const [rosterList, setRosterList] = useState<PendingRequest[]>([])
   const [previewImageUrl, setPreviewImageUrl] = useState('')
-  const [studentPopup, setStudentPopup] = useState<{ name: string; section: string; time: string; img?: string | null } | null>(null)
+  const [studentPopup, setStudentPopup] = useState<{ name: string; section: string; time: string; img?: string | null; prompt?: string; detectedDirection?: string } | null>(null)
 
   useEffect(() => { init(); return () => cleanup() }, [])
 
@@ -285,6 +285,24 @@ export default function TeacherSession({ onLogout }: Props) {
 
   const displayed = selectedSection ? attendees.filter(a => a.section === selectedSection) : attendees
 
+  async function showStudentPopup(name: string, section: string, time: string, img: string | null | undefined, studentId: string) {
+    let prompt = ''
+    let detectedDirection = ''
+    if (sessionId) {
+      const { data } = await supabase()
+        .from('liveness_logs')
+        .select('prompt, detected_direction')
+        .eq('session_id', sessionId)
+        .eq('student_id', studentId)
+        .maybeSingle()
+      if (data) {
+        prompt = data.prompt || ''
+        detectedDirection = data.detected_direction || ''
+      }
+    }
+    setStudentPopup({ name, section, time, img, prompt, detectedDirection })
+  }
+
   return (
     <>
       <div className="teacher-topbar">
@@ -386,7 +404,7 @@ export default function TeacherSession({ onLogout }: Props) {
                       <div className="att-dot" />
                     )}
                     <div className="att-num">{i + 1}</div>
-                    <div className="att-name" style={{ cursor: 'pointer' }} onClick={() => setStudentPopup({ name: a.student_name, section: a.section || '', time: new Date(a.scanned_at).toLocaleTimeString(), img: a.face_frame_url })}>
+                    <div className="att-name" style={{ cursor: 'pointer' }} onClick={() => showStudentPopup(a.student_name, a.section || '', new Date(a.scanned_at).toLocaleTimeString(), a.face_frame_url, a.student_id)}>
                       {a.student_name}
                       {a.section && <span className="section-badge">{a.section}</span>}
                     </div>
@@ -434,7 +452,7 @@ export default function TeacherSession({ onLogout }: Props) {
                         <div className="face-thumb-sm" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(a.face_frame_url || '')}><img src={a.face_frame_url} alt="" /></div>
                       ) : null}
                       <div className="att-num">{i + 1}</div>
-                      <div className="att-name" style={{ cursor: 'pointer' }} onClick={() => setStudentPopup({ name: a.student_name, section: a.section || '', time: new Date(a.scanned_at).toLocaleTimeString(), img: a.face_frame_url })}>
+                      <div className="att-name" style={{ cursor: 'pointer' }} onClick={() => showStudentPopup(a.student_name, a.section || '', new Date(a.scanned_at).toLocaleTimeString(), a.face_frame_url, a.student_id)}>
                         {a.student_name}
                         {a.section && <span className="section-badge">{a.section}</span>}
                       </div>
@@ -518,7 +536,18 @@ export default function TeacherSession({ onLogout }: Props) {
             {studentPopup.img && <img src={studentPopup.img} alt="" style={{ width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--green2)', marginBottom: 16 }} />}
             <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 6 }}>{studentPopup.name}</div>
             {studentPopup.section && <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--green-lt)', marginBottom: 6 }}>{studentPopup.section}</div>}
-            <div style={{ fontSize: 16, color: 'rgba(255,255,255,.6)' }}>{studentPopup.time}</div>
+            <div style={{ fontSize: 16, color: 'rgba(255,255,255,.6)', marginBottom: 12 }}>{studentPopup.time}</div>
+            {studentPopup.prompt && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, fontSize: 15, fontWeight: 600 }}>
+                <span style={{ color: 'rgba(255,255,255,.5)' }}>Asked: {studentPopup.prompt === 'left' ? 'Turn LEFT' : studentPopup.prompt === 'right' ? 'Turn RIGHT' : 'Nod'}</span>
+                <span style={{ color: 'rgba(255,255,255,.3)' }}>→</span>
+                <span style={{ color: studentPopup.detectedDirection && studentPopup.detectedDirection !== 'none' ? 'var(--green2)' : 'var(--red)' }}>
+                  {studentPopup.detectedDirection && studentPopup.detectedDirection !== 'none'
+                    ? `Did: Turn ${studentPopup.detectedDirection.toUpperCase()} ✅`
+                    : 'Did: Nothing ❌'}
+                </span>
+              </div>
+            )}
             <span className="img-preview-close" onClick={() => setStudentPopup(null)} style={{ position: 'static', display: 'inline-block', marginTop: 24, fontSize: 16, opacity: 0.5 }}>Tap to close</span>
           </div>
         </div>
