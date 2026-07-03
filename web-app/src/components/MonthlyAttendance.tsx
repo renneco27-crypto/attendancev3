@@ -220,8 +220,9 @@ h3{margin-top:24px}
         .select('id').eq('student_name', name).eq('section', selectedSection)
         .neq('status', 'revoked').maybeSingle()
       if (!existing) {
+        const sid = 'csv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
         await supabase().from('device_registrations').insert({
-          student_name: name, section: selectedSection, device_identifier: '', status: 'pending',
+          student_name: name, section: selectedSection, student_id: sid, device_identifier: '', status: 'pending',
         })
         added++
       }
