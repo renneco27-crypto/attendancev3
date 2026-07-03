@@ -14,6 +14,8 @@ interface PendingRequest {
   device_identifier: string
   created_at: string
   face_photo_url?: string | null
+  parent_email?: string
+  parent_name?: string
 }
 
 interface Attendee {
@@ -140,13 +142,27 @@ export default function TeacherSession({ onLogout }: Props) {
   async function fetchRoster(section?: string) {
     let query = supabase()
       .from('device_registrations')
-      .select('id, student_name, device_identifier, created_at')
+      .select('id, student_name, device_identifier, created_at, parent_email, parent_name')
       .eq('status', 'approved')
       .neq('device_identifier', '')
     const s = section !== undefined ? section : selectedSection
     if (s) query = query.eq('section', s)
     const { data } = await query.order('student_name', { ascending: true })
     if (data) setRosterList(data as PendingRequest[])
+  }
+
+  const [editRosterId, setEditRosterId] = useState<string | null>(null)
+  const [editEmail, setEditEmail] = useState('')
+  const [editPName, setEditPName] = useState('')
+
+  async function saveParentInfo() {
+    if (!editRosterId) return
+    await supabase()
+      .from('device_registrations')
+      .update({ parent_email: editEmail, parent_name: editPName })
+      .eq('id', editRosterId)
+    setEditRosterId(null)
+    fetchRoster()
   }
 
   async function handleRevoke(requestId: string) {
@@ -540,7 +556,11 @@ export default function TeacherSession({ onLogout }: Props) {
                     <div style={{ flex: 1 }}>
                       <div className="reg-student-name">{r.student_name}</div>
                       <div className="reg-device-id">Device: {r.device_identifier.slice(0, 12)}…</div>
+                      <div style={{ fontSize: 11, color: r.parent_email ? 'var(--green2)' : 'var(--muted)', marginTop: 2 }}>
+                        {r.parent_email ? `📧 ${r.parent_email}${r.parent_name ? ' (' + r.parent_name + ')' : ''}` : 'No parent email'}
+                      </div>
                     </div>
+                    <button onClick={() => { setEditRosterId(r.id); setEditEmail(r.parent_email || ''); setEditPName(r.parent_name || '') }} style={{ padding: '8px 14px', borderRadius: 10, background: 'var(--off)', color: 'var(--text)', border: '1px solid var(--border)', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
                     <button onClick={() => handleRevoke(r.id)} style={{ padding: '8px 14px', borderRadius: 10, background: 'var(--red-lt)', color: 'var(--red)', border: '1px solid #f5c0c0', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Revoke</button>
                   </div>
                 ))}
@@ -586,6 +606,27 @@ export default function TeacherSession({ onLogout }: Props) {
               </div>
             )}
             <span className="img-preview-close" onClick={() => setStudentPopup(null)} style={{ position: 'static', display: 'inline-block', marginTop: 24, fontSize: 16, opacity: 0.5 }}>Tap to close</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT PARENT INFO POPUP ── */}
+      {editRosterId && (
+        <div className="img-preview-overlay" onClick={() => setEditRosterId(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 16, padding: 24, maxWidth: 360, width: '90%', margin: '0 auto', position: 'relative', top: '20%' }}>
+            <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 18, fontWeight: 800, color: 'var(--text)', marginBottom: 16 }}>Edit Parent Contact</div>
+            <div className="field">
+              <label>Parent Email</label>
+              <input type="email" placeholder="parent@example.com" value={editEmail} onChange={e => setEditEmail(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Parent Name</label>
+              <input type="text" placeholder="e.g. Maria Dela Cruz" value={editPName} onChange={e => setEditPName(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button className="btn-primary" onClick={saveParentInfo} style={{ flex: 1 }}>Save</button>
+              <button className="btn-primary" onClick={() => setEditRosterId(null)} style={{ flex: 1, background: 'var(--off)', color: 'var(--text)', border: '1px solid var(--border)' }}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
