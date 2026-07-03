@@ -345,7 +345,10 @@ export default function TeacherSession({ onLogout }: Props) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {teacherCode ? (
-              <button onClick={() => setShowCodePopup(true)} style={{ padding: '8px 14px', borderRadius: 10, background: 'var(--green-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Show My Code</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={() => setShowCodePopup(true)} style={{ padding: '8px 14px', borderRadius: 10, background: 'var(--green-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Show My Code</button>
+                <button onClick={() => { setTeacherCode(''); setShowCodePopup(false) }} style={{ padding: '8px 10px', borderRadius: 10, background: 'transparent', color: 'rgba(255,255,255,.5)', border: '1px solid rgba(255,255,255,.15)', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✎</button>
+              </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="text" placeholder="Set teacher code" value={teacherCode} onChange={e => setTeacherCode(e.target.value.toUpperCase())} style={{ width: 110, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
