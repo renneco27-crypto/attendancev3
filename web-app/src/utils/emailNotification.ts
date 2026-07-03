@@ -9,17 +9,22 @@ interface EmailJsProvider {
 }
 
 function loadProviders(): EmailJsProvider[] {
+  const hardcoded: EmailJsProvider[] = [
+    { name: 'emailjs_1', serviceId: 'service_xm4jf6f', templateId: 'template_hr3tjks', publicKey: '9CxKfrBe4TlhWCtqO', dailyLimit: 30 },
+    { name: 'emailjs_2', serviceId: 'service_qbtste8', templateId: 'template_72opyxl', publicKey: 'fwleshmOUbIuDPuRT', dailyLimit: 30 },
+    { name: 'emailjs_3', serviceId: 'service_x13oewk', templateId: 'template_91ax3xp', publicKey: 'MoG3Pqw56ewTj3oKa', dailyLimit: 30 },
+  ]
   const keys = ['1', '2', '3'] as const
-  const providers: EmailJsProvider[] = []
+  const fromEnv: EmailJsProvider[] = []
   for (const k of keys) {
     const sid = import.meta.env[`VITE_EMAILJS_${k}_SERVICE_ID`] as string | undefined
     const tid = import.meta.env[`VITE_EMAILJS_${k}_TEMPLATE_ID`] as string | undefined
     const pk = import.meta.env[`VITE_EMAILJS_${k}_PUBLIC_KEY`] as string | undefined
     if (sid && tid && pk) {
-      providers.push({ name: `emailjs_${k}`, serviceId: sid, templateId: tid, publicKey: pk, dailyLimit: 30 })
+      fromEnv.push({ name: `emailjs_${k}`, serviceId: sid, templateId: tid, publicKey: pk, dailyLimit: 30 })
     }
   }
-  return providers
+  return fromEnv.length === 3 ? fromEnv : hardcoded
 }
 
 const providers = loadProviders()
