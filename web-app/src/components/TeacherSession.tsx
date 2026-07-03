@@ -18,6 +18,7 @@ interface PendingRequest {
 
 interface Attendee {
   id: string
+  student_id?: string
   student_name: string
   scanned_at: string
   is_mock_location?: boolean
@@ -196,7 +197,15 @@ export default function TeacherSession({ onLogout }: Props) {
       filter: `session_id=eq.${id}`,
     }, (payload: any) => {
       const r = payload.new
-      setAttendees(prev => [...prev, { id: r.id, student_name: r.student_name ?? 'Unknown', scanned_at: r.scanned_at, is_mock_location: r.is_mock_location ?? false, section: r.section || '', face_frame_url: r.face_frame_url || null }])
+      setAttendees(prev => [...prev, {
+        id: r.id,
+        student_id: r.student_id ?? '',
+        student_name: r.student_name ?? 'Unknown',
+        scanned_at: r.scanned_at,
+        is_mock_location: r.is_mock_location ?? false,
+        section: r.section || '',
+        face_frame_url: r.face_frame_url || null
+      }])
     })
     channel.on('postgres_changes', {
       event: 'DELETE', schema: 'public', table: 'attendance_records',
@@ -374,7 +383,7 @@ export default function TeacherSession({ onLogout }: Props) {
                     <button className="kick-btn" onClick={() => handleKick(a.id)}>Kick</button>
                   </div>
                 ))
-              }
+              )}
             </div>
             <button className="btn-danger" onClick={handleEndSession}>■ End Session</button>
           </div>

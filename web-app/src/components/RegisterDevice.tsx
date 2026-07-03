@@ -20,8 +20,22 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
   const [errorMsg, setErrorMsg] = useState('')
   const [cameraActive, setCameraActive] = useState(false)
   const [capturedSelfie, setCapturedSelfie] = useState<string | null>(null)
+  const [faceError, setFaceError] = useState('')
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+
+  function rgbToYCbCr(r: number, g: number, b: number) {
+    const y  = 0.299 * r + 0.587 * g + 0.114 * b
+    const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b
+    const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b
+    return { y, cb, cr }
+  }
+
+  function isSkinTone(r: number, g: number, b: number) {
+    const { y, cb, cr } = rgbToYCbCr(r, g, b)
+    if (y < 20 || y > 250) return false
+    return cb >= 77 && cb <= 135 && cr >= 133 && cr <= 180
+  }
 
   async function startCamera() {
     try {
@@ -49,12 +63,35 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.drawImage(video, 0, 0)
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const data = imageData.data
+    const topY = Math.floor(canvas.height * 0.2)
+    const botY = Math.floor(canvas.height * 0.8)
+    const startX = Math.floor(canvas.width * 0.2)
+    const endX = Math.floor(canvas.width * 0.8)
+    let skinCount = 0
+    let totalCount = 0
+    for (let y = topY; y < botY; y++) {
+      for (let x = startX; x < endX; x++) {
+        totalCount++
+        const idx = (y * canvas.width + x) * 4
+        if (isSkinTone(data[idx], data[idx + 1], data[idx + 2])) skinCount++
+      }
+    }
+    const ratio = totalCount > 0 ? skinCount / totalCount : 0
+    if (ratio < 0.12) {
+      setFaceError('No face detected — ensure your face is clearly visible and well-lit')
+      return
+    }
+    setFaceError('')
     setCapturedSelfie(canvas.toDataURL('image/jpeg', 0.7))
     stopCamera()
   }
 
   function retakeSelfie() {
     setCapturedSelfie(null)
+    setFaceError('')
     startCamera()
   }
 
@@ -216,6 +253,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
                 <div>
                   <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 12, background: '#000' }} />
                   <button className="btn-primary" style={{ marginTop: 10 }} onClick={captureSelfie}>📸 Capture</button>
+                  {faceError && <div style={{ color: 'var(--red)', fontSize: 13, fontWeight: 600, marginTop: 8, textAlign: 'center' }}>{faceError}</div>}
                 </div>
               )}
               {capturedSelfie && (
