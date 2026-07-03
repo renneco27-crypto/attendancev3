@@ -15,6 +15,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
   const [pin, setPin] = useState('')
   const [pinConfirm, setPinConfirm] = useState('')
   const [section, setSection] = useState('')
+  const [parentEmail, setParentEmail] = useState('')
   const [phase, setPhase] = useState<Phase>('form')
   const [message, setMessage] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
@@ -22,6 +23,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
   async function handleSubmit() {
     if (!name.trim() || pin.length !== 4 || pin !== pinConfirm) return
     if (!section) { setErrorMsg('Please select your section.'); setPhase('failed'); return }
+    if (parentEmail && !parentEmail.includes('@')) { setErrorMsg('Please enter a valid parent email.'); setPhase('failed'); return }
     setPhase('submitting')
     const deviceId = getDeviceId()
 
@@ -49,10 +51,10 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
           setPhase('failed'); return
         }
         if (row.status === 'pending') {
-          const { error: upErr } = await supabase()
-            .from('device_registrations')
-            .update({ device_identifier: deviceId, pin, section })
-            .eq('id', row.id)
+            const { error: upErr } = await supabase()
+              .from('device_registrations')
+              .update({ device_identifier: deviceId, pin, section, parent_email: parentEmail || null })
+              .eq('id', row.id)
           if (upErr) {
             if (upErr.message?.includes('idx_device_registrations_uniq')) {
               setErrorMsg('You have already used this device to sign in to an account. Please tell an admin to delete your account.')
@@ -77,6 +79,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
           section,
           teacher_id: teacherId,
           status: 'pending',
+          parent_email: parentEmail || null,
         })
       if (insErr) {
         if (insErr.message?.includes('idx_device_registrations_uniq')) {
@@ -135,6 +138,10 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
                 <option value="">Select your section</option>
                 {SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
+            </div>
+            <div className="field">
+              <label>Parent Email (optional)</label>
+              <input type="email" placeholder="parent@example.com" value={parentEmail} onChange={e => setParentEmail(e.target.value)} />
             </div>
             {pinError() && <div style={{ color: 'var(--red)', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{pinError()}</div>}
             <button className="btn-primary" onClick={handleSubmit} disabled={!name.trim() || pin.length !== 4 || pin !== pinConfirm || !section}>

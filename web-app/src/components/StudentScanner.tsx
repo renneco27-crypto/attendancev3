@@ -4,6 +4,7 @@ import { supabase } from '../services/supabase'
 import { getDeviceId } from '../utils/device'
 import { checkMockLocation } from '../utils/mockLocation'
 import { checkDeveloperOptions } from '../utils/developerOptions'
+import { sendParentEmail } from '../utils/emailNotification'
 
 interface Props {
   onBack: () => void
@@ -40,6 +41,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
   const [livenessProgress, setLivenessProgress] = useState(0)
   const [livenessResult, setLivenessResult] = useState<'scanning' | 'pass' | 'fail'>('scanning')
   const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false)
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle')
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const capturedRef = useRef<QrPayload[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -50,7 +52,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
   const livenessSessionIdRef = useRef<string>('')
   const noFaceSecondsRef = useRef(0)
   const noFaceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const capturedDataRef = useRef<{ sessionId: string; studentId: string; studentName: string; role: string; section: string; faceFrameUrl?: string } | null>(null)
+  const capturedDataRef = useRef<{ sessionId: string; studentId: string; studentName: string; role: string; section: string; parentEmail?: string; faceFrameUrl?: string } | null>(null)
 
   useEffect(() => {
     return () => {
@@ -189,7 +191,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     const deviceId = getDeviceId()
     const { data: devReg, error: devErr } = await supabase()
       .from('device_registrations')
-      .select('id, student_id, student_name, status, pin, section')
+      .select('id, student_id, student_name, status, pin, section, parent_email')
       .eq('device_identifier', deviceId)
       .eq('teacher_id', session.teacher_id)
       .single()
@@ -227,7 +229,8 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       studentId: devReg.student_id,
       studentName: devReg.student_name,
       role: 'student',
-      section: devReg.section || ''
+      section: devReg.section || '',
+      parentEmail: devReg.parent_email || ''
     }
 
     try {
@@ -333,7 +336,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       if (data.frameUrl) c.faceFrameUrl = data.frameUrl
     } catch {}
 
-    await supabase()
+    const { data: inserted } = await supabase()
       .from('attendance_records')
       .insert({
         session_id: c.sessionId,
@@ -343,8 +346,17 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
         face_frame_url: c.faceFrameUrl || null,
         is_mock_location: false
       })
+      .select('id')
+      .single()
 
     setTimeout(() => setScanPhase('success'), 800)
+
+    if (inserted && c.parentEmail) {
+      setEmailStatus('sending')
+      sendParentEmail(c.parentEmail, c.studentName, c.section, inserted.id)
+        .then(r => setEmailStatus(r.success ? 'sent' : 'failed'))
+        .catch(() => setEmailStatus('failed'))
+    }
   }
 
   function cleanupLiveness() {
@@ -374,6 +386,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     setLivenessReason('')
     setLivenessProgress(0)
     setLivenessResult('scanning')
+    setEmailStatus('idle')
     setScanPhase('idle')
     checkGeo()
   }
@@ -455,6 +468,13 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
           <div className="result-icon success">✅</div>
           <div className="result-title">{alreadyCheckedIn ? 'Already Checked In' : 'Attendance Recorded!'}</div>
           <div className="result-sub">{alreadyCheckedIn ? 'You have already checked in for this session.' : 'Your attendance has been logged.'}</div>
+          {!alreadyCheckedIn && emailStatus !== 'idle' && (
+            <div style={{ marginTop: 8, fontSize: 13, fontWeight: 600, color: emailStatus === 'sent' ? 'var(--green)' : emailStatus === 'failed' ? 'var(--red)' : 'var(--gold)' }}>
+              {emailStatus === 'sending' && '📧 Notifying parent…'}
+              {emailStatus === 'sent' && '📧 Parent notified ✓'}
+              {emailStatus === 'failed' && '📧 Parent notification failed'}
+            </div>
+          )}
           <div className="scanner-btns">
             <button className="btn-white" onClick={resetScanner}>Done</button>
           </div>
