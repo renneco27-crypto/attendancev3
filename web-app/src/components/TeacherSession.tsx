@@ -96,7 +96,12 @@ export default function TeacherSession({ onLogout }: Props) {
     }
   }
 
-  async function fetchPastClasses(uid: string) {
+  async function fetchPastClasses(uid?: string) {
+    if (!uid) {
+      const { data: { user } } = await supabase().auth.getUser()
+      if (!user) return
+      uid = user.id
+    }
     const { data } = await supabase()
       .from('attendance_sessions')
       .select('id, class_name')
@@ -170,7 +175,7 @@ export default function TeacherSession({ onLogout }: Props) {
     if (err1) console.error('Delete records error:', err1.message)
     const { error: err2 } = await supabase().from('attendance_sessions').delete().eq('id', sessionId)
     if (err2) console.error('Delete session error:', err2.message)
-    if (!err2) fetchPastClasses(teacherIdRef.current || teacherId)
+    if (!err2) fetchPastClasses()
   }
 
   async function startSession() {
@@ -256,6 +261,7 @@ export default function TeacherSession({ onLogout }: Props) {
     await endSession(sid)
     sessionIdRef.current = null
     setPhase('ended')
+    fetchPastClasses()
   }
 
   async function handleNewSession() {
