@@ -346,7 +346,7 @@ export default function TeacherSession({ onLogout }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {teacherCode ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button onClick={() => setShowCodePopup(true)} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--green-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Show My Code</button>
+                <button onClick={() => setShowCodePopup(true)} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--green-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Saved</button>
                 <button onClick={() => { setTeacherCode(''); setShowCodePopup(false) }} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--gold-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Change</button>
               </div>
             ) : (
