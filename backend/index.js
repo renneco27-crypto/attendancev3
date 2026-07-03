@@ -40,8 +40,17 @@ setInterval(async () => {
     .in('status', ['pending', 'revoked']);
 }, 6 * 60 * 60 * 1000);
 
+function rgbToYCbCr(r, g, b) {
+  const y  = 0.299 * r + 0.587 * g + 0.114 * b;
+  const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+  const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+  return { y, cb, cr };
+}
+
 function isSkinTone(r, g, b) {
-  return r > 80 && g > 50 && b > 30 && r > g && r > b && (r - g) > 15;
+  const { y, cb, cr } = rgbToYCbCr(r, g, b);
+  if (y < 20 || y > 250) return false;
+  return cb >= 77 && cb <= 135 && cr >= 133 && cr <= 180;
 }
 
 async function analyzeFrame(frameBase64) {
@@ -106,11 +115,7 @@ function computePixelDiff(frame1, frame2, width, height, channels, topY, botY, c
 }
 
 function scoreLiveness(session) {
-  let score = 0;
-  let reasons = [];
-
   const { prompt, faceXHistory, faceYHistory, frames } = session;
-
   const faceXArr = faceXHistory.slice(-10);
   const faceYArr = faceYHistory.slice(-10);
 
@@ -118,34 +123,37 @@ function scoreLiveness(session) {
     return { isLive: false, score: 0, reason: 'Low liveness score (0/100)' };
   }
 
-  const baselineX = (faceXArr[0] + faceXArr[1] + faceXArr[2]) / 3;
-  const currentX = faceXArr[faceXArr.length - 1];
-  const drift = currentX - baselineX;
+  // --- Gate: face must be consistently present in recent frames ---
+  const recentFrames = frames.slice(-5);
+  if (recentFrames.length > 0) {
+    const avgSkinRatio = recentFrames.reduce((s, f) => s + f.skinPixelRatio, 0) / recentFrames.length;
+    const framesWithFace = recentFrames.filter(f => f.skinPixelRatio >= 0.12).length;
+    const minFramesRequired = Math.ceil(recentFrames.length * 0.6);
 
-  let dirScore = 0;
-  if (prompt === 'left') {
-    if (drift < -0.08) { dirScore = 50; }
-    else if (drift < -0.04) { dirScore = 25; }
-    else { dirScore = 0; }
-  } else if (prompt === 'right') {
-    if (drift > 0.08) { dirScore = 50; }
-    else if (drift > 0.04) { dirScore = 25; }
-    else { dirScore = 0; }
-  } else if (prompt === 'nod') {
-    if (faceYArr.length >= 3) {
-      const meanY = faceYArr.reduce((a, b) => a + b, 0) / faceYArr.length;
-      const variance = faceYArr.reduce((a, b) => a + (b - meanY) ** 2, 0) / faceYArr.length;
-      if (variance > 0.06) dirScore = 50;
-      else if (variance > 0.03) dirScore = 25;
-      else dirScore = 0;
+    if (avgSkinRatio < 0.12 || framesWithFace < minFramesRequired) {
+      return { isLive: false, score: 0, reason: 'No face detected — verification requires a clearly visible face' };
     }
   }
 
-  score += dirScore;
+  // --- Only reached once a face has been confirmed present ---
+  let score = 0;
+  let reasons = [];
 
-  if (dirScore === 0) {
-    reasons.push('Turn direction mismatch — did not follow prompt');
+  const baselineX = (faceXArr[0] + faceXArr[1] + faceXArr[2]) / 3;
+  const drift = faceXArr[faceXArr.length - 1] - baselineX;
+
+  let dirScore = 0;
+  if (prompt === 'left') {
+    dirScore = drift < -0.08 ? 50 : drift < -0.04 ? 25 : 0;
+  } else if (prompt === 'right') {
+    dirScore = drift > 0.08 ? 50 : drift > 0.04 ? 25 : 0;
+  } else if (prompt === 'nod' && faceYArr.length >= 3) {
+    const meanY = faceYArr.reduce((a, b) => a + b, 0) / faceYArr.length;
+    const variance = faceYArr.reduce((a, b) => a + (b - meanY) ** 2, 0) / faceYArr.length;
+    dirScore = variance > 0.06 ? 50 : variance > 0.03 ? 25 : 0;
   }
+  score += dirScore;
+  if (dirScore === 0) reasons.push('Turn direction mismatch — did not follow prompt');
 
   let motionScore = 0;
   if (frames.length >= 2) {
@@ -181,41 +189,17 @@ function scoreLiveness(session) {
   }
 
   score += motionScore;
-
-  const lastAnalysis = frames[frames.length - 1];
-  if (lastAnalysis) {
-    const ratio = lastAnalysis.skinPixelRatio;
-    if (ratio > 0.25) {
-      score += 25;
-    } else if (ratio < 0.10) {
-      score -= 20;
-      reasons.push('No face detected in frame');
-    }
-  }
+  score = Math.max(0, Math.min(75, score));
 
   if (dirScore === 0 && reasons.length === 0) {
     reasons.push('Head turn not detected — possible static image');
   }
 
-  score = Math.max(0, Math.min(100, score));
-
-  if (score < livenessThreshold) {
-    if (reasons.length === 0) {
-      reasons.push(`Low liveness score (${score}/100)`);
-    } else {
-      const lowReason = reasons.find(r => r.startsWith('Low liveness'));
-      if (!lowReason) reasons.push(`Low liveness score (${score}/100)`);
-    }
-  } else {
-    if (reasons.length === 0 || (reasons.length === 1 && reasons[0].startsWith('Low liveness'))) {
-      reasons = ['Verified — head turn confirmed'];
-    }
-  }
-
-  const finalReason = reasons.join('; ');
   const isLive = score >= livenessThreshold;
+  if (!isLive && reasons.length === 0) reasons.push(`Low liveness score (${score}/100)`);
+  if (isLive && reasons.length === 0) reasons = ['Verified — head turn confirmed'];
 
-  return { isLive, score, reason: finalReason };
+  return { isLive, score, reason: reasons.join('; ') };
 }
 
 const app = express();
