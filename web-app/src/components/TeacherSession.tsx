@@ -166,7 +166,6 @@ export default function TeacherSession({ onLogout }: Props) {
   }
 
   async function deleteSession(sessionId: string) {
-    if (!confirm('Delete this class session and its attendance records?')) return
     await supabase().from('attendance_records').delete().eq('session_id', sessionId)
     await supabase().from('attendance_sessions').delete().eq('id', sessionId)
     fetchPastClasses(teacherIdRef.current || teacherId)
