@@ -49,6 +49,7 @@ export default function TeacherSession({ onLogout }: Props) {
   const [sections, setSections] = useState<string[]>([])
   const [selectedSection, setSelectedSection] = useState('')
   const [teacherCode, setTeacherCode] = useState('')
+  const [isCodeSaved, setIsCodeSaved] = useState(false)
   const [showCodePopup, setShowCodePopup] = useState(false)
   const rotationTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const channelRef = useRef<any>(null)
@@ -94,6 +95,7 @@ export default function TeacherSession({ onLogout }: Props) {
         await supabase().from('teachers').insert({ auth_user_id: user.id, name })
       } else if (existing.teacher_code) {
         setTeacherCode(existing.teacher_code)
+        setIsCodeSaved(true)
       }
       supabase().from('sections').select('name').order('name').then(({ data }) => {
         if (data) setSections(data.map(s => s.name))
@@ -191,7 +193,7 @@ export default function TeacherSession({ onLogout }: Props) {
     const { error } = await supabase()
       .from('teachers').update({ teacher_code: code })
       .eq('auth_user_id', teacherIdRef.current || teacherId)
-    if (!error) setTeacherCode(code)
+    if (!error) { setTeacherCode(code); setIsCodeSaved(true) }
   }
 
   async function handleKick(attendanceRecordId: string) {
@@ -346,16 +348,16 @@ export default function TeacherSession({ onLogout }: Props) {
             <div className="tb-brand">ACLC Ormoc <span>Teacher Panel</span></div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {teacherCode ? (
+            {isCodeSaved ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button onClick={() => setShowCodePopup(true)} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--green-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Saved</button>
-                <button onClick={() => { setTeacherCode(''); setShowCodePopup(false); setCodeError('') }} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--gold-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Change</button>
+                <button onClick={() => { setIsCodeSaved(false); setCodeError('') }} style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--gold-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Change</button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input type="text" placeholder="Set teacher code" value={teacherCode} onChange={e => setTeacherCode(e.target.value.toUpperCase())} style={{ width: 110, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
-                  <button onClick={saveTeacherCode} style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--green2)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                  <input type="text" placeholder="Set teacher code" value={teacherCode} onChange={e => { setTeacherCode(e.target.value.toUpperCase()); if (codeError) setCodeError('') }} style={{ width: 110, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
+                  <button onClick={saveTeacherCode} disabled={teacherCode.trim().length < 4} style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--green2)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: teacherCode.trim().length < 4 ? 0.5 : 1 }}>Save</button>
                 </div>
                 {codeError && <div style={{ color: 'var(--red)', fontSize: 11, fontWeight: 600 }}>{codeError}</div>}
               </div>
