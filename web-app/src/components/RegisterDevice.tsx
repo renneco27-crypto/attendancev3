@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { supabase } from '../services/supabase'
 import { getDeviceId } from '../utils/device'
 
@@ -10,33 +10,42 @@ interface Props {
 type Phase = 'form' | 'submitting' | 'success' | 'failed'
 
 export default function RegisterDevice({ onBack, onRegistered }: Props) {
-  const SECTIONS = ['BSIT 2-A', 'BSIT 2-B']
+  const [teacherCode, setTeacherCode] = useState('')
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
   const [pinConfirm, setPinConfirm] = useState('')
   const [section, setSection] = useState('')
+  const [sections, setSections] = useState<string[]>([])
   const [parentEmail, setParentEmail] = useState('')
   const [phase, setPhase] = useState<Phase>('form')
   const [message, setMessage] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
+  useEffect(() => {
+    supabase().from('sections').select('name').order('name').then(({ data }) => {
+      if (data) setSections(data.map(s => s.name))
+    })
+  }, [])
+
   async function handleSubmit() {
     if (!name.trim() || pin.length !== 4 || pin !== pinConfirm) return
+    if (!teacherCode.trim()) { setErrorMsg('Please enter your teacher\'s code.'); setPhase('failed'); return }
     if (!section) { setErrorMsg('Please select your section.'); setPhase('failed'); return }
     if (parentEmail && !parentEmail.includes('@')) { setErrorMsg('Please enter a valid parent email.'); setPhase('failed'); return }
     setPhase('submitting')
     const deviceId = getDeviceId()
 
     try {
-      const { data: teachers } = await supabase()
+      const { data: teacher } = await supabase()
         .from('teachers')
         .select('auth_user_id')
-        .limit(1)
-      if (!teachers || teachers.length === 0) {
-        setErrorMsg('No teacher configured in the system.')
+        .eq('teacher_code', teacherCode.trim().toUpperCase())
+        .maybeSingle()
+      if (!teacher) {
+        setErrorMsg('Teacher not found. Check the code with your teacher.')
         setPhase('failed'); return
       }
-      const teacherId = teachers[0].auth_user_id
+      const teacherId = teacher.auth_user_id
 
       const { data: existing } = await supabase()
         .from('device_registrations')
@@ -123,6 +132,10 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
       <div className="reg-card">
         {phase === 'form' && (
           <div>
+            <div className="field">
+              <label>Teacher Code</label>
+              <input type="text" placeholder="e.g. SMITH" value={teacherCode} onChange={e => setTeacherCode(e.target.value.toUpperCase())} />
+            </div>
             <div className="field"><label>Full Name</label><input type="text" placeholder="e.g. Juan Dela Cruz" value={name} onChange={e => setName(e.target.value)} /></div>
             <div className="field">
               <label>Create a 4-digit PIN</label>
@@ -136,7 +149,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
               <label>Section</label>
               <select value={section} onChange={e => setSection(e.target.value)}>
                 <option value="">Select your section</option>
-                {SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                {sections.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div className="field">
@@ -169,7 +182,7 @@ export default function RegisterDevice({ onBack, onRegistered }: Props) {
             <div className="reg-icon">❌</div>
             <h3>Something went wrong</h3>
             <p>{errorMsg}</p>
-            <button className="btn-primary mt24" onClick={() => { setPhase('form'); setErrorMsg(''); setPin(''); setPinConfirm('') }}>Try Again</button>
+            <button className="btn-primary mt24" onClick={() => { setPhase('form'); setErrorMsg(''); setTeacherCode(''); setPin(''); setPinConfirm('') }}>Try Again</button>
           </div>
         )}
       </div>

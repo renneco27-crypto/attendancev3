@@ -44,8 +44,10 @@ export default function TeacherSession({ onLogout }: Props) {
   const [pastClasses, setPastClasses] = useState<PastClass[]>([])
   const [selectedChip, setSelectedChip] = useState('')
   const [qrFullscreen, setQrFullscreen] = useState(false)
-  const SECTIONS = ['BSIT 2-A', 'BSIT 2-B']
+  const [sections, setSections] = useState<string[]>([])
   const [selectedSection, setSelectedSection] = useState('')
+  const [teacherCode, setTeacherCode] = useState('')
+  const [showCodePopup, setShowCodePopup] = useState(false)
   const rotationTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const channelRef = useRef<any>(null)
   const [livenessSummary, setLivenessSummary] = useState<Record<string, { score: number; isLive: boolean }>>({})
@@ -85,10 +87,15 @@ export default function TeacherSession({ onLogout }: Props) {
         user.user_metadata?.full_name ?? 'Teacher'
       setTeacherName(name)
       const { data: existing } = await supabase()
-        .from('teachers').select('id').eq('auth_user_id', user.id).maybeSingle()
+        .from('teachers').select('id, teacher_code').eq('auth_user_id', user.id).maybeSingle()
       if (!existing) {
         await supabase().from('teachers').insert({ auth_user_id: user.id, name })
+      } else if (existing.teacher_code) {
+        setTeacherCode(existing.teacher_code)
       }
+      supabase().from('sections').select('name').order('name').then(({ data }) => {
+        if (data) setSections(data.map(s => s.name))
+      })
       fetchPastClasses(user.id)
       fetchPending()
     } catch (e) {
@@ -158,6 +165,15 @@ export default function TeacherSession({ onLogout }: Props) {
   async function handleReject(requestId: string) {
     const ok = await revokeDevice(requestId)
     if (ok) fetchPending()
+  }
+
+  async function saveTeacherCode() {
+    const code = teacherCode.trim().toUpperCase()
+    if (!code) return
+    const { error } = await supabase()
+      .from('teachers').update({ teacher_code: code })
+      .eq('auth_user_id', teacherIdRef.current || teacherId)
+    if (!error) setTeacherCode(code)
   }
 
   async function handleKick(attendanceRecordId: string) {
@@ -311,7 +327,17 @@ export default function TeacherSession({ onLogout }: Props) {
             <div className="tb-logo-img"><img src="/photo_2.webp" alt="ACLC Ormoc" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
             <div className="tb-brand">ACLC Ormoc <span>Teacher Panel</span></div>
           </div>
-          <button onClick={handleLogout} style={{ padding: '8px 14px', borderRadius: 10, background: 'var(--red-lt)', color: 'var(--red)', border: '1px solid #f5c0c0', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Logout</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {teacherCode ? (
+              <button onClick={() => setShowCodePopup(true)} style={{ padding: '8px 14px', borderRadius: 10, background: 'var(--green-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Show My Code</button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="text" placeholder="Set teacher code" value={teacherCode} onChange={e => setTeacherCode(e.target.value.toUpperCase())} style={{ width: 110, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
+                <button onClick={saveTeacherCode} style={{ padding: '6px 12px', borderRadius: 8, background: 'var(--green2)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+              </div>
+            )}
+            <button onClick={handleLogout} style={{ padding: '8px 14px', borderRadius: 10, background: 'var(--red-lt)', color: 'var(--red)', border: '1px solid #f5c0c0', fontFamily: 'Inter,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Logout</button>
+          </div>
         </div>
         <div className="teacher-tabs">
           <button className={`tab-btn ${tab === 'session' ? 'active' : ''}`} onClick={() => setTab('session')}>Session</button>
@@ -324,7 +350,7 @@ export default function TeacherSession({ onLogout }: Props) {
           <select className="section-select" value={selectedSection}
             onChange={e => { const s = e.target.value; setSelectedSection(s); fetchPending(s); fetchRoster(s) }}>
             <option value="">All Sections</option>
-            {SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            {sections.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
       </div>
@@ -528,6 +554,17 @@ export default function TeacherSession({ onLogout }: Props) {
           <MonthlyAttendance selectedSection={selectedSection} />
         </div>
       </div>
+
+      {/* ── TEACHER CODE POPUP ── */}
+      {showCodePopup && (
+        <div className="img-preview-overlay" onClick={() => setShowCodePopup(false)}>
+          <div style={{ textAlign: 'center', padding: 20 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 14, color: 'rgba(255,255,255,.5)', marginBottom: 12 }}>Share this code with your students:</div>
+            <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 64, fontWeight: 900, color: '#fff', letterSpacing: 8, marginBottom: 8 }}>{teacherCode}</div>
+            <span className="img-preview-close" onClick={() => setShowCodePopup(false)} style={{ position: 'static', display: 'inline-block', marginTop: 24, fontSize: 16, opacity: 0.5 }}>Tap to close</span>
+          </div>
+        </div>
+      )}
 
       {/* ── STUDENT POPUP OVERLAY ── */}
       {studentPopup && (
