@@ -227,8 +227,8 @@ h3{margin-top:24px}
         added++
       }
     }
-    alert(`Added ${added} new student(s) from CSV. Refresh to see them.`)
     loadData()
+    if (added > 0) alert(`Added ${added} new student(s) to ${selectedSection}.`)
     e.target.value = ''
   }
 
