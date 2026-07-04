@@ -106,7 +106,7 @@ export class LivenessChecker {
         if (this.pitchHistory.length >= 6 && pitchRange > this.config.nodThresholdDeg && this._hasReversal(this.pitchHistory)) {
           gesture = 'nod';
         } else if (this.yawHistory.length >= 6 && yawRange > this.config.turnThresholdDeg) {
-          gesture = yaw > 0 ? 'turn_right' : 'turn_left';
+          gesture = yaw > 0 ? 'turn_left' : 'turn_right';
         }
         this.onGesture({ gesture, pitch, yaw, pitchRange, yawRange });
       } else {

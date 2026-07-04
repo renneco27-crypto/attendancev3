@@ -298,8 +298,8 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       gestureLabel = 'Turn RIGHT'
       setLivenessReason('Turn RIGHT detected ✓')
     } else if (result.gesture === 'nod') {
-      gestureLabel = result.pitch > 0 ? 'Nod UP' : 'Nod DOWN'
-      setLivenessReason(`${result.pitch > 0 ? 'Nod UP' : 'Nod DOWN'} detected ✓`)
+      gestureLabel = result.pitch > 0 ? 'Nod DOWN' : 'Nod UP'
+      setLivenessReason(`${result.pitch > 0 ? 'Nod DOWN' : 'Nod UP'} detected ✓`)
     }
 
     setLivenessScore(100)
@@ -311,24 +311,33 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
   }
 
   async function finishLiveness() {
-    cleanupLiveness()
     const c = capturedDataRef.current
-    if (!c) { setScanPhase('success'); return }
+    if (!c) { cleanupLiveness(); setScanPhase('success'); return }
 
     setLivenessResult('pass')
 
-    // Capture final frame from video
+    // Capture final frame from video BEFORE stopping camera
     let frameBase64 = ''
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas')
-      canvas.width = videoRef.current.videoWidth || 320
-      canvas.height = videoRef.current.videoHeight || 240
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0)
-        frameBase64 = canvas.toDataURL('image/jpeg', 0.7)
+    if (videoRef.current && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
+      try {
+        const bitmap = await createImageBitmap(videoRef.current)
+        const canvas = document.createElement('canvas')
+        canvas.width = bitmap.width
+        canvas.height = bitmap.height
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(bitmap, 0, 0)
+          bitmap.close()
+          frameBase64 = canvas.toDataURL('image/jpeg', 0.8)
+        } else {
+          bitmap.close()
+        }
+      } catch (e) {
+        console.error('Frame capture error:', e)
       }
     }
+
+    cleanupLiveness()
 
     try {
       const resp = await fetch(`${BACKEND_URL}/api/submitAttendanceFinal`, {
