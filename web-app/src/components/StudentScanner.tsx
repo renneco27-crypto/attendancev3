@@ -487,17 +487,6 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
           <div className="result-icon fail">✖</div>
           <div className="result-title">Scan Failed</div>
           <div className="result-sub">{errorMsg}</div>
-          {/* Failed attempts list */}
-          {failedAttempts.length > 0 && (
-            <div className="failed-section" style={{ marginTop: 8 }}>
-              <h4 style={{ margin: 0, fontSize: 14, color: 'var(--red)' }}>Failed Attempts</h4>
-              <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                {failedAttempts.map((msg, i) => (
-                  <li key={i} style={{ fontSize: 12, color: 'var(--red)' }}>{msg}</li>
-                ))}
-              </ul>
-            </div>
-          )}
           <div className="scanner-btns">
             <button className="btn-white" onClick={resetScanner}>Try Again</button>
             <button className="btn-white-ghost" onClick={onBack}>Back</button>

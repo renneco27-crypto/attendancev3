@@ -3,6 +3,7 @@ import QRCode from 'qrcode'
 import { supabase } from '../services/supabase'
 import { createSession, endSession, rotateSessionKey, revokeDevice, kickFromSession } from '../services/api'
 import MonthlyAttendance from './MonthlyAttendance'
+import { sendParentEmail } from '../utils/emailNotification'
 
 interface Props {
   onLogout: () => void
@@ -200,6 +201,23 @@ export default function TeacherSession({ onLogout }: Props) {
     if (!data || data.length === 0) { setCodeError('No matching teacher record — contact support'); return }
     setTeacherCode(code)
     setIsCodeSaved(true)
+  }
+
+  const [sendingEmails, setSendingEmails] = useState<Record<string, 'sending' | 'sent' | 'failed'>>({})
+
+  async function handleNotifyParent(studentId: string, attendanceId: string) {
+    if (!studentId || !attendanceId) return
+    setSendingEmails(prev => ({ ...prev, [attendanceId]: 'sending' }))
+    try {
+      const res = await sendParentEmail(studentId, attendanceId)
+      if (res.success) {
+        setSendingEmails(prev => ({ ...prev, [attendanceId]: 'sent' }))
+      } else {
+        setSendingEmails(prev => ({ ...prev, [attendanceId]: 'failed' }))
+      }
+    } catch (e) {
+      setSendingEmails(prev => ({ ...prev, [attendanceId]: 'failed' }))
+    }
   }
 
   async function handleKick(attendanceRecordId: string) {
@@ -468,7 +486,17 @@ export default function TeacherSession({ onLogout }: Props) {
                     </div>
                     {a.is_mock_location && <span className="att-mock-icon" title="Fake GPS detected">⚠️</span>}
                     <div className="att-time">{new Date(a.scanned_at).toLocaleTimeString()}</div>
-                    <button className="kick-btn" onClick={() => handleKick(a.id)}>Kick</button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button 
+                        className="approve-btn" 
+                        style={{ padding: '6px 12px', fontSize: 11, borderRadius: 8 }}
+                        onClick={() => handleNotifyParent(a.student_id || '', a.id)}
+                        disabled={sendingEmails[a.id] === 'sending' || sendingEmails[a.id] === 'sent'}
+                      >
+                        {sendingEmails[a.id] === 'sending' ? 'Sending…' : sendingEmails[a.id] === 'sent' ? 'Sent ✓' : sendingEmails[a.id] === 'failed' ? 'Retry 📧' : 'Notify 📧'}
+                      </button>
+                      <button className="kick-btn" onClick={() => handleKick(a.id)}>Kick</button>
+                    </div>
                   </div>
                 ))
               )}
