@@ -354,10 +354,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     setTimeout(() => setScanPhase('success'), 800)
 
     if (inserted) {
-      setEmailStatus('sending')
-      sendParentEmail(c.studentId, inserted.id)
-        .then(r => setEmailStatus(r.success ? 'sent' : 'failed'))
-        .catch(() => setEmailStatus('failed'))
+      // Automatic parent email notification has been disabled so only teachers can send it manually.
     }
   }
 
@@ -469,13 +466,6 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
           <div className="result-icon success">✅</div>
           <div className="result-title">{alreadyCheckedIn ? 'Already Checked In' : 'Attendance Recorded!'}</div>
           <div className="result-sub">{alreadyCheckedIn ? 'You have already checked in for this session.' : 'Your attendance has been logged.'}</div>
-          {!alreadyCheckedIn && emailStatus !== 'idle' && (
-            <div style={{ marginTop: 8, fontSize: 13, fontWeight: 600, color: emailStatus === 'sent' ? 'var(--green)' : emailStatus === 'failed' ? 'var(--red)' : 'var(--gold)' }}>
-              {emailStatus === 'sending' && '📧 Notifying parent…'}
-              {emailStatus === 'sent' && '📧 Parent notified ✓'}
-              {emailStatus === 'failed' && '📧 Parent notification failed'}
-            </div>
-          )}
           <div className="scanner-btns">
             <button className="btn-white" onClick={resetScanner}>Done</button>
           </div>
