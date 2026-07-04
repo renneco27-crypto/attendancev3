@@ -86,15 +86,14 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       .from('settings').select('value').eq('key', 'campusLng').maybeSingle()
     const { data: radius } = await supabase()
       .from('settings').select('value').eq('key', 'campusRadius').maybeSingle()
-    const campusLat = parseFloat(lat?.value) || 11.021893
-    const campusLng = parseFloat(lng?.value) || 124.587584
-    const maxDist = parseInt(radius?.value) || 300
+    const campusLat = lat?.value, campusLng = lng?.value, maxDist = radius?.value
+    if (!campusLat || !campusLng || !maxDist) { setGeoText('📍 Location not configured'); return }
 
     if (!navigator.geolocation) { setGeoText('⚠️ Could not verify location'); return }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const dist = haversine(pos.coords.latitude, pos.coords.longitude, campusLat, campusLng)
-        if (dist <= maxDist) setGeoText(`📍 On campus (${Math.round(dist)}m from gate)`)
+        const dist = haversine(pos.coords.latitude, pos.coords.longitude, parseFloat(campusLat), parseFloat(campusLng))
+        if (dist <= parseInt(maxDist)) setGeoText(`📍 On campus (${Math.round(dist)}m from gate)`)
         else { setGeoText(`❌ You are ${Math.round(dist)}m off campus`); setTimeout(() => setScanPhase('geo-fail'), 800) }
       },
       () => setGeoText('⚠️ Could not verify location'),

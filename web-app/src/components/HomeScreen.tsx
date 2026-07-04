@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { supabase } from '../services/supabase'
 
 interface Props {
   onSelectRole: (role: 'student' | 'teacher' | 'register') => void
@@ -15,15 +16,28 @@ export default function HomeScreen({ onSelectRole }: Props) {
   const [geoLabel, setGeoLabel] = useState('Locating you…')
 
   useEffect(() => {
-    if (!navigator.geolocation) { setGeoLabel('📍 Location unavailable'); return }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const dist = haversine(pos.coords.latitude, pos.coords.longitude, 11.021893, 124.587584)
-        setGeoLabel(dist <= 300 ? `📍 On campus (${Math.round(dist)}m from gate)` : `📍 Off campus — ${Math.round(dist)}m away`)
-      },
-      () => setGeoLabel('📍 Location unavailable'),
-      { enableHighAccuracy: true, timeout: 8000 }
-    )
+    (async () => {
+      const { data: locEnabled } = await supabase()
+        .from('settings').select('value').eq('key', 'locationEnabled').maybeSingle()
+      if (locEnabled?.value === 'false') { setGeoLabel('📍 Location check disabled'); return }
+      const { data: lat } = await supabase()
+        .from('settings').select('value').eq('key', 'campusLat').maybeSingle()
+      const { data: lng } = await supabase()
+        .from('settings').select('value').eq('key', 'campusLng').maybeSingle()
+      const { data: radius } = await supabase()
+        .from('settings').select('value').eq('key', 'campusRadius').maybeSingle()
+      const campusLat = lat?.value, campusLng = lng?.value, maxDist = radius?.value
+      if (!campusLat || !campusLng || !maxDist) { setGeoLabel('📍 Location not configured'); return }
+      if (!navigator.geolocation) { setGeoLabel('📍 Location unavailable'); return }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const dist = haversine(pos.coords.latitude, pos.coords.longitude, parseFloat(campusLat), parseFloat(campusLng))
+          setGeoLabel(dist <= parseInt(maxDist) ? `📍 On campus (${Math.round(dist)}m from gate)` : `📍 Off campus — ${Math.round(dist)}m away`)
+        },
+        () => setGeoLabel('📍 Location unavailable'),
+        { enableHighAccuracy: true, timeout: 8000 }
+      )
+    })()
   }, [])
 
   return (
