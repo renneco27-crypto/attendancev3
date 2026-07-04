@@ -285,6 +285,13 @@ export default function TeacherSession({ onLogout }: Props) {
       const deletedId = payload.old.id
       setAttendees(prev => prev.filter(a => a.id !== deletedId))
     })
+    channel.on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'liveness_logs',
+      filter: `session_id=eq.${id}`,
+    }, (payload: any) => {
+      const l = payload.new
+      setLivenessSummary(prev => ({ ...prev, [l.student_id]: { score: l.liveness_score, isLive: l.is_live } }))
+    })
     channel.subscribe()
     channelRef.current = channel
     rotationTimer.current = setInterval(rotateKey, 1000)
@@ -472,33 +479,48 @@ export default function TeacherSession({ onLogout }: Props) {
               {displayed.length === 0 ? (
                 <div className="att-empty">Waiting for students to scan…</div>
               ) : (
-                displayed.slice(-20).map((a, i) => (
-                  <div key={a.id} className="att-row">
-                    {a.face_frame_url ? (
-                      <div className="face-thumb-sm" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(a.face_frame_url || '')}><img src={a.face_frame_url} alt="" /></div>
-                    ) : (
-                      <div className="att-dot" />
-                    )}
-                    <div className="att-num">{i + 1}</div>
-                    <div className="att-name" style={{ cursor: 'pointer' }} onClick={() => showStudentPopup(a.student_name, a.section || '', new Date(a.scanned_at).toLocaleTimeString(), a.face_frame_url, a.student_id)}>
-                      {a.student_name}
-                      {a.section && <span className="section-badge">{a.section}</span>}
+                <>
+                  {displayed.filter(a => livenessSummary[a.student_id || '']?.isLive !== false).slice(-20).map((a, i) => (
+                    <div key={a.id} className="att-row">
+                      {a.face_frame_url ? (
+                        <div className="face-thumb-sm" style={{ cursor: 'pointer' }} onClick={() => setPreviewImageUrl(a.face_frame_url || '')}><img src={a.face_frame_url} alt="" /></div>
+                      ) : (
+                        <div className="att-dot" />
+                      )}
+                      <div className="att-num">{i + 1}</div>
+                      <div className="att-name" style={{ cursor: 'pointer' }} onClick={() => showStudentPopup(a.student_name, a.section || '', new Date(a.scanned_at).toLocaleTimeString(), a.face_frame_url, a.student_id)}>
+                        {a.student_name}
+                        {a.section && <span className="section-badge">{a.section}</span>}
+                      </div>
+                      {a.is_mock_location && <span className="att-mock-icon" title="Fake GPS detected">⚠️</span>}
+                      <div className="att-time">{new Date(a.scanned_at).toLocaleTimeString()}</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button 
+                          className="approve-btn" 
+                          style={{ padding: '6px 12px', fontSize: 11, borderRadius: 8 }}
+                          onClick={() => handleNotifyParent(a.student_id || '', a.id)}
+                          disabled={sendingEmails[a.id] === 'sending' || sendingEmails[a.id] === 'sent'}
+                        >
+                          {sendingEmails[a.id] === 'sending' ? 'Sending…' : sendingEmails[a.id] === 'sent' ? 'Sent ✓' : sendingEmails[a.id] === 'failed' ? 'Retry 📧' : 'Notify 📧'}
+                        </button>
+                        <button className="kick-btn" onClick={() => handleKick(a.id)}>Kick</button>
+                      </div>
                     </div>
-                    {a.is_mock_location && <span className="att-mock-icon" title="Fake GPS detected">⚠️</span>}
-                    <div className="att-time">{new Date(a.scanned_at).toLocaleTimeString()}</div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button 
-                        className="approve-btn" 
-                        style={{ padding: '6px 12px', fontSize: 11, borderRadius: 8 }}
-                        onClick={() => handleNotifyParent(a.student_id || '', a.id)}
-                        disabled={sendingEmails[a.id] === 'sending' || sendingEmails[a.id] === 'sent'}
-                      >
-                        {sendingEmails[a.id] === 'sending' ? 'Sending…' : sendingEmails[a.id] === 'sent' ? 'Sent ✓' : sendingEmails[a.id] === 'failed' ? 'Retry 📧' : 'Notify 📧'}
-                      </button>
-                      <button className="kick-btn" onClick={() => handleKick(a.id)}>Kick</button>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                  {displayed.filter(a => livenessSummary[a.student_id || '']?.isLive === false).length > 0 && (
+                    <>
+                      <div style={{ marginTop: 16, padding: '8px 12px', fontSize: 12, fontWeight: 700, color: 'var(--red)', background: 'var(--red-lt)', borderRadius: 8 }}>Failed Liveness</div>
+                      {displayed.filter(a => livenessSummary[a.student_id || '']?.isLive === false).slice(-20).map((a, i) => (
+                        <div key={a.id} className="att-row" style={{ opacity: 0.7 }}>
+                          <div className="face-thumb-sm" style={{ background: 'var(--red-lt)', color: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>✖</div>
+                          <div className="att-name">{a.student_name}</div>
+                          <div className="att-time" style={{ color: 'var(--red)' }}>Liveness Failed</div>
+                          <button className="kick-btn" onClick={() => handleKick(a.id)}>Kick</button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
               )}
             </div>
             <button className="btn-danger" onClick={handleEndSession}>■ End Session</button>
@@ -638,13 +660,13 @@ export default function TeacherSession({ onLogout }: Props) {
             <div style={{ fontFamily: "'Sora','Inter',sans-serif", fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 6 }}>{studentPopup.name}</div>
             {studentPopup.section && <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--green-lt)', marginBottom: 6 }}>{studentPopup.section}</div>}
             <div style={{ fontSize: 16, color: 'rgba(255,255,255,.6)', marginBottom: 12 }}>{studentPopup.time}</div>
-            {studentPopup.prompt && (
+              {studentPopup.prompt && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, fontSize: 15, fontWeight: 600 }}>
-                <span style={{ color: 'rgba(255,255,255,.5)' }}>Asked: {studentPopup.prompt === 'left' ? 'Turn LEFT' : studentPopup.prompt === 'right' ? 'Turn RIGHT' : 'Nod'}</span>
+                <span style={{ color: 'rgba(255,255,255,.5)' }}>Asked: {studentPopup.prompt === 'left' ? 'Turn LEFT' : studentPopup.prompt === 'right' ? 'Turn RIGHT' : studentPopup.prompt === 'forward' ? 'Nod UP' : 'Nod DOWN'}</span>
                 <span style={{ color: 'rgba(255,255,255,.3)' }}>→</span>
                 <span style={{ color: studentPopup.detectedDirection && studentPopup.detectedDirection !== 'none' ? 'var(--green2)' : 'var(--red)' }}>
                   {studentPopup.detectedDirection && studentPopup.detectedDirection !== 'none'
-                    ? `Did: Turn ${studentPopup.detectedDirection.toUpperCase()} ✅`
+                    ? `Did: ${studentPopup.detectedDirection.toUpperCase()} ✅`
                     : 'Did: Nothing ❌'}
                 </span>
               </div>
