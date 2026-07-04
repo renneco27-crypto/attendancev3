@@ -22,6 +22,10 @@ setInterval(async () => {
     .in('status', ['pending', 'revoked']);
 }, 6 * 60 * 60 * 1000);
 
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+
 app.get('/api/getFlaggedRecords', async (req, res) => {
   try {
     const { data, error } = await supabase
