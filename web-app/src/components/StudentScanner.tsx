@@ -420,7 +420,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       </div>
       {scanPhase === 'idle' && (
         <div className="scanner-body">
-          <div className="geo-check">📍 <span>{geoText}</span></div>
+          <div className="geo-check"><span>{geoText}</span></div>
           <div className="qr-viewport">
             <div className="qr-br" />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
