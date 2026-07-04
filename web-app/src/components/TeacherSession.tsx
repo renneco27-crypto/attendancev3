@@ -190,8 +190,15 @@ export default function TeacherSession({ onLogout }: Props) {
   async function saveTeacherCode() {
     const code = teacherCode.trim().toUpperCase()
     if (code.length !== 4) { setCodeError('Code must be exactly 4 characters'); return }
-    const id = teacherIdRef.current || teacherId
-    if (!id) { setCodeError('Teacher session not ready — try again'); return }
+    let id = teacherIdRef.current || teacherId
+    if (!id) {
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 250))
+        id = teacherIdRef.current || teacherId
+        if (id) break
+      }
+      if (!id) { setCodeError('Teacher session not ready — try again'); return }
+    }
     setCodeError('')
     const { data, error } = await supabase()
       .from('teachers').update({ teacher_code: code })
@@ -260,6 +267,7 @@ export default function TeacherSession({ onLogout }: Props) {
     sessionIdRef.current = id
     setSessionId(id)
     setPhase('active')
+    fetchPastClasses()
     renderQr(JSON.stringify({ session_id: id, rotation_key }))
 
     const channel = supabase().channel(`attendance_records:${id}`)
@@ -343,6 +351,7 @@ export default function TeacherSession({ onLogout }: Props) {
     setSelectedChip('')
     setClassName('')
     setPhase('setup')
+    fetchPastClasses()
   }
 
   function handleLogout() {
@@ -378,29 +387,27 @@ export default function TeacherSession({ onLogout }: Props) {
             <div className="tb-logo-img"><img src="/photo_2.webp" alt="ACLC Ormoc" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
             <div className="tb-brand">ACLC Ormoc <span>Teacher Panel</span></div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {isCodeSaved ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <button onClick={() => setShowCodePopup(true)} style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--green-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Saved</button>
-                <button onClick={() => { setIsCodeSaved(false); setCodeError('') }} style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--gold-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Change</button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input type="text" placeholder="Code" maxLength={4} value={teacherCode} onChange={e => { setTeacherCode(e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 4)); if (codeError) setCodeError('') }} style={{ width: 70, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
-                  <button onClick={saveTeacherCode} disabled={teacherCode.trim().length !== 4} style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--green2)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: teacherCode.trim().length !== 4 ? 0.5 : 1 }}>Save</button>
-                </div>
-                {codeError && <div style={{ color: 'var(--red)', fontSize: 11, fontWeight: 600 }}>{codeError}</div>}
-              </div>
-            )}
-            <button onClick={handleLogout} style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--red-lt)', color: 'var(--red)', border: '1px solid #f5c0c0', fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Logout</button>
-          </div>
+          <button onClick={handleLogout} style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--red-lt)', color: 'var(--red)', border: '1px solid #f5c0c0', fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Logout</button>
+        </div>
+        <div className="teacher-topbar-code">
+          {isCodeSaved ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button onClick={() => setShowCodePopup(true)} style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--green-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Saved</button>
+              <button onClick={() => { setIsCodeSaved(false); setCodeError('') }} style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--gold-lt)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Change</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="text" placeholder="Code" maxLength={4} value={teacherCode} onChange={e => { setTeacherCode(e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 4)); if (codeError) setCodeError('') }} style={{ width: 70, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, fontFamily: 'Inter,sans-serif' }} />
+              <button onClick={saveTeacherCode} disabled={teacherCode.trim().length !== 4} style={{ padding: '6px 10px', borderRadius: 8, background: 'var(--green2)', color: '#fff', border: 'none', fontFamily: 'Inter,sans-serif', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: teacherCode.trim().length !== 4 ? 0.5 : 1 }}>Save</button>
+              {codeError && <span style={{ color: 'var(--red)', fontSize: 11, fontWeight: 600 }}>{codeError}</span>}
+            </div>
+          )}
         </div>
         <div className="teacher-tabs">
           <button className={`tab-btn ${tab === 'session' ? 'active' : ''}`} onClick={() => setTab('session')}>Session</button>
           <button className={`tab-btn ${tab === 'registrations' ? 'active' : ''}`} onClick={() => { setTab('registrations'); fetchPending() }}>Registrations</button>
           <button className={`tab-btn ${tab === 'roster' ? 'active' : ''}`} onClick={() => { setTab('roster'); fetchRoster() }}>Roster</button>
-          <button className={`tab-btn ${tab === 'attendance' ? 'active' : ''}`} onClick={() => setTab('attendance')}>Attendance</button>
+          <button className={`tab-btn ${tab === 'attendance' ? 'active' : ''}`} onClick={() => { setTab('attendance'); fetchPastClasses() }}>Attendance</button>
         </div>
         <div className="section-row">
           <span className="section-label">Section:</span>
@@ -427,7 +434,7 @@ export default function TeacherSession({ onLogout }: Props) {
                 <div className="gc-meta" id="teacher-geo-meta">📍 ACLC Ormoc Campus</div>
               </div>
             </div>
-            {pastClasses.length > 0 && <div className="chips-label">Recent Classes</div>}
+            {pastClasses.length > 0 && <div className="chips-label">Recent Classes <button onClick={() => fetchPastClasses()} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--green2)', fontWeight: 700, fontFamily: 'Inter,sans-serif' }}>↻</button></div>}
             {pastClasses.length > 0 && (
               <div className="class-chips">
                 {pastClasses.map(s => (
