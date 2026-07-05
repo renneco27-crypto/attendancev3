@@ -417,6 +417,10 @@ export default function TeacherSession({ onLogout }: Props) {
             <option value="">All Sections</option>
             {sections.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <a href="https://t.me/rentendancebot" target="_blank" rel="noopener noreferrer"
+             style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--green2)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            🤖 Get Excel
+          </a>
         </div>
       </div>
 

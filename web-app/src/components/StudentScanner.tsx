@@ -52,6 +52,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
   const streamRef = useRef<MediaStream | null>(null)
   const captureTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const checkerRef = useRef<LivenessChecker | null>(null)
+  const livenessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [modelLoading, setModelLoading] = useState(false)
   const capturedDataRef = useRef<{ sessionId: string; studentId: string; studentName: string; role: string; section: string; faceFrameUrl?: string; gesture?: string } | null>(null)
 
@@ -62,6 +63,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       if (timerRef.current) clearTimeout(timerRef.current)
       if (captureTimerRef.current) clearInterval(captureTimerRef.current)
       if (checkerRef.current) { checkerRef.current.stop(); checkerRef.current = null }
+      if (livenessTimeoutRef.current) { clearTimeout(livenessTimeoutRef.current); livenessTimeoutRef.current = null }
     }
   }, [])
 
@@ -277,6 +279,13 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
       await checker.start()
       setModelLoading(false)
       setLivenessReason('Move your face as prompted...')
+      livenessTimeoutRef.current = setTimeout(() => {
+        if (!gestureConfirmed) {
+          cleanupLiveness()
+          setErrorMsg('Did not follow instructions.')
+          setScanPhase('liveness-timeout')
+        }
+      }, 15000)
     } catch {
       setErrorMsg('Front camera access denied.')
       setScanPhase('fail')
@@ -303,6 +312,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     }
 
     gestureConfirmed = true
+    if (livenessTimeoutRef.current) { clearTimeout(livenessTimeoutRef.current); livenessTimeoutRef.current = null }
     let gestureLabel = ''
     if (result.gesture === 'turn_left') {
       gestureLabel = 'Turn LEFT'
@@ -378,6 +388,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
 
   function cleanupLiveness() {
     if (checkerRef.current) { checkerRef.current.stop(); checkerRef.current = null }
+    if (livenessTimeoutRef.current) { clearTimeout(livenessTimeoutRef.current); livenessTimeoutRef.current = null }
     stopFrontCamera()
   }
 
@@ -491,6 +502,18 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
           <div className="result-icon fail">✖</div>
           <div className="result-title">Scan Failed</div>
           <div className="result-sub">{errorMsg}</div>
+          <div className="scanner-btns">
+            <button className="btn-white" onClick={resetScanner}>Try Again</button>
+            <button className="btn-white-ghost" onClick={onBack}>Back</button>
+          </div>
+        </div>
+      )}
+
+      {scanPhase === 'liveness-timeout' && (
+        <div className="scanner-body">
+          <div className="result-icon fail">✖</div>
+          <div className="result-title">Scan Failed</div>
+          <div className="result-sub">Did not follow instructions. Please try again.</div>
           <div className="scanner-btns">
             <button className="btn-white" onClick={resetScanner}>Try Again</button>
             <button className="btn-white-ghost" onClick={onBack}>Back</button>
