@@ -502,7 +502,7 @@ export default function TeacherSession({ onLogout }: Props) {
                       </div>
                       {a.is_mock_location && <span className="att-mock-icon" title="Fake GPS detected">⚠️</span>}
                       <div className="att-time">{new Date(a.scanned_at).toLocaleTimeString()}</div>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div className="att-actions-row">
                         <button 
                           className="approve-btn" 
                           style={{ padding: '6px 12px', fontSize: 11, borderRadius: 8 }}
