@@ -208,6 +208,7 @@ export default function TeacherSession({ onLogout }: Props) {
     if (!data || data.length === 0) { setCodeError('No matching teacher record — contact support'); return }
     setTeacherCode(code)
     setIsCodeSaved(true)
+    init()
   }
 
   const [sendingEmails, setSendingEmails] = useState<Record<string, 'sending' | 'sent' | 'failed'>>({})
@@ -407,7 +408,7 @@ export default function TeacherSession({ onLogout }: Props) {
           <button className={`tab-btn ${tab === 'session' ? 'active' : ''}`} onClick={() => setTab('session')}>Session</button>
           <button className={`tab-btn ${tab === 'registrations' ? 'active' : ''}`} onClick={() => { setTab('registrations'); fetchPending() }}>Registrations</button>
           <button className={`tab-btn ${tab === 'roster' ? 'active' : ''}`} onClick={() => { setTab('roster'); fetchRoster() }}>Roster</button>
-          <button className={`tab-btn ${tab === 'attendance' ? 'active' : ''}`} onClick={() => { setTab('attendance'); fetchPastClasses() }}>Attendance</button>
+          <button className={`tab-btn ${tab === 'attendance' ? 'active' : ''}`} onClick={() => { setTab('attendance'); fetchPastClasses(); init() }}>Attendance</button>
         </div>
         <div className="section-row">
           <span className="section-label">Section:</span>

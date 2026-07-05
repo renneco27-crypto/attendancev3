@@ -14,12 +14,13 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number): numb
 
 export default function HomeScreen({ onSelectRole }: Props) {
   const [geoLabel, setGeoLabel] = useState('Locating you…')
+  const [locationReady, setLocationReady] = useState(false)
 
   useEffect(() => {
     (async () => {
       const { data: locEnabled } = await supabase()
         .from('settings').select('value').eq('key', 'locationEnabled').maybeSingle()
-      if (locEnabled?.value === 'false') { setGeoLabel('📍 Location check disabled'); return }
+      if (locEnabled?.value === 'false') { setGeoLabel('📍 Location check disabled'); setLocationReady(true); return }
       const { data: lat } = await supabase()
         .from('settings').select('value').eq('key', 'campusLat').maybeSingle()
       const { data: lng } = await supabase()
@@ -27,14 +28,15 @@ export default function HomeScreen({ onSelectRole }: Props) {
       const { data: radius } = await supabase()
         .from('settings').select('value').eq('key', 'campusRadius').maybeSingle()
       const campusLat = lat?.value, campusLng = lng?.value, maxDist = radius?.value
-      if (!campusLat || !campusLng || !maxDist) { setGeoLabel('📍 Location not configured'); return }
-      if (!navigator.geolocation) { setGeoLabel('📍 Location unavailable'); return }
+      if (!campusLat || !campusLng || !maxDist) { setGeoLabel('📍 Location not configured'); setLocationReady(true); return }
+      if (!navigator.geolocation) { setGeoLabel('📍 Location unavailable'); setLocationReady(true); return }
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const dist = haversine(pos.coords.latitude, pos.coords.longitude, parseFloat(campusLat), parseFloat(campusLng))
           setGeoLabel(dist <= parseInt(maxDist) ? `📍 On campus (${Math.round(dist)}m from gate)` : `📍 Off campus — ${Math.round(dist)}m away`)
+          setLocationReady(true)
         },
-        () => setGeoLabel('📍 Location unavailable'),
+        () => { setGeoLabel('📍 Location unavailable'); setLocationReady(true) },
         { enableHighAccuracy: true, timeout: 8000 }
       )
     })()
@@ -53,10 +55,10 @@ export default function HomeScreen({ onSelectRole }: Props) {
         <div className="geo-pill"><div className="geo-dot" /><span id="home-geo-label">{geoLabel}</span></div>
         <div className="home-sub">Scan your QR code to log attendance instantly. Built for students and teachers at ACLC Ormoc.</div>
         <div className="home-btns">
-          <button className="btn-primary" onClick={() => onSelectRole('student')}>📱 I'm a Student</button>
+          <button className="btn-primary" onClick={() => onSelectRole('student')} disabled={!locationReady} style={{ opacity: locationReady ? 1 : 0.5 }}>📱 I'm a Student</button>
           <div className="home-row">
-            <button className="btn-outline" onClick={() => onSelectRole('teacher')}>🔐 I'm a Teacher</button>
-            <button className="btn-outline" onClick={() => onSelectRole('register')}>📋 Register Device</button>
+            <button className="btn-outline" onClick={() => onSelectRole('teacher')} disabled={!locationReady} style={{ opacity: locationReady ? 1 : 0.5 }}>🔐 I'm a Teacher</button>
+            <button className="btn-outline" onClick={() => onSelectRole('register')} disabled={!locationReady} style={{ opacity: locationReady ? 1 : 0.5 }}>📋 Register Device</button>
           </div>
         </div>
       </div>

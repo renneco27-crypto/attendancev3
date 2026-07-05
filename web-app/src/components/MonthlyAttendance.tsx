@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabase'
-import * as XLSX from 'xlsx'
 
 interface Props {
   selectedSection: string
@@ -26,10 +25,6 @@ export default function MonthlyAttendance({ selectedSection }: Props) {
   const [loading, setLoading] = useState(false)
   const [undoStack, setUndoStack] = useState<HistoryEntry[]>([])
   const [redoStack, setRedoStack] = useState<HistoryEntry[]>([])
-
-  const [showCsvInput, setShowCsvInput] = useState(false)
-  const [csvText, setCsvText] = useState('')
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const year = date.getFullYear()
   const month = date.getMonth()
@@ -125,158 +120,6 @@ export default function MonthlyAttendance({ selectedSection }: Props) {
   function prevMonth() { setDate(new Date(year, month - 1, 1)) }
   function nextMonth() { setDate(new Date(year, month + 1, 1)) }
 
-  function exportExcel() {
-    const wsData: (string | number)[][] = []
-    const header: string[] = ['Student']
-    for (let d = 1; d <= daysInMonth; d++) header.push(String(d))
-    header.push('Total')
-    wsData.push(header)
-
-    students.forEach(s => {
-      let count = 0
-      const row: (string | number)[] = [s.student_name]
-      for (let d = 1; d <= daysInMonth; d++) {
-        const p = present.has(s.student_id + '-' + d)
-        if (p) count++
-        row.push(p ? '✓' : '')
-      }
-      row.push(`${count}/${daysInMonth}`)
-      wsData.push(row)
-    })
-
-    const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.aoa_to_sheet(wsData)
-
-    ws['!cols'] = [{ wch: 25 }, ...Array(daysInMonth).fill({ wch: 5 }), { wch: 10 }]
-
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1')
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const addr = XLSX.utils.encode_cell({ r: 0, c })
-      if (!ws[addr]) continue
-      ws[addr].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1A3A6B' } }, alignment: { horizontal: 'center' } }
-    }
-    for (let r = 1; r <= range.e.r; r++) {
-      for (let c = 1; c < range.e.c; c++) {
-        const addr = XLSX.utils.encode_cell({ r, c })
-        if (!ws[addr]) continue
-        const isPresent = ws[addr].v === '✓'
-        ws[addr].s = { fill: { fgColor: { rgb: isPresent ? 'E8F5EC' : 'F5F5F5' } }, alignment: { horizontal: 'center' } }
-      }
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, 'Attendance')
-    XLSX.writeFile(wb, selectedSection + '_' + monthLabel.replace(' ', '_') + '.xlsx')
-  }
-
-  function exportPdf() {
-    const printWin = window.open('', '_blank')
-    if (!printWin) return
-    let html = `<html><head><title>${selectedSection} - ${monthLabel}</title>
-<style>body{font-family:sans-serif;padding:20px}
-h2{text-align:center;margin-bottom:20px}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th,td{border:1px solid #ccc;padding:4px 6px;text-align:center}
-th{background:#f5f5f5}
-td.name{text-align:left;font-weight:600}
-td.present{background:#d4edda;color:#155724}
-td.absent{color:#ccc}
-h3{margin-top:24px}
-@media print{body{padding:0}}
-</style></head><body>
-<h2>${selectedSection}</h2>
-<h3>${monthLabel} — Present: ${students.filter(s => present.has(s.student_id + '-' + new Date().getDate())).length} / ${students.length}</h3>
-<table><tr><th>Student</th>`
-    for (let d = 1; d <= daysInMonth; d++) html += `<th>${d}</th>`
-    html += '</tr>'
-    students.forEach(s => {
-      html += `<tr><td class="name">${s.student_name}</td>`
-      for (let d = 1; d <= daysInMonth; d++) {
-        html += present.has(s.student_id + '-' + d) ? '<td class="present">✓</td>' : '<td class="absent">—</td>'
-      }
-      html += '</tr>'
-    })
-    html += '</table></body></html>'
-    printWin.document.write(html)
-    printWin.document.close()
-    setTimeout(() => printWin.print(), 300)
-  }
-
-  function handleUpload() {
-    fileInputRef.current?.click()
-  }
-
-  async function addStudentsFromCsv(text: string) {
-    const lines = text.split('\n').filter(l => l.trim())
-    if (lines.length < 2) { alert('CSV must have a header row and at least one student name.'); return }
-    const names = lines.slice(1).map(l => l.split(',')[0].replace(/"/g, '').trim()).filter(n => n)
-    if (!names.length) { alert('No student names found in CSV.'); return }
-
-    const { data: teachers, error: teacherErr } = await supabase().from('teachers').select('auth_user_id').limit(1)
-    if (teacherErr) { alert('Failed to look up teacher: ' + teacherErr.message); return }
-    const teacherId = teachers?.[0]?.auth_user_id
-    if (!teacherId) { alert('No teacher configured.'); return }
-
-    let added = 0
-    let skipped = 0
-    const failures: string[] = []
-
-    for (const name of names) {
-      const { data: existing, error: lookupErr } = await supabase()
-        .from('device_registrations')
-        .select('id')
-        .eq('student_name', name)
-        .eq('section', selectedSection)
-        .neq('status', 'revoked')
-        .maybeSingle()
-
-      if (lookupErr) {
-        failures.push(`${name} (lookup failed: ${lookupErr.message})`)
-        continue
-      }
-
-      if (existing) {
-        skipped++
-        continue
-      }
-
-      const sid = 'csv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
-      const { error: insertErr } = await supabase()
-        .from('device_registrations')
-        .insert({
-          student_name: name,
-          section: selectedSection,
-          student_id: sid,
-          device_identifier: '',
-          status: 'pending',
-          teacher_id: teacherId,
-        })
-
-      if (insertErr) {
-        failures.push(`${name} (${insertErr.message})`)
-      } else {
-        added++
-      }
-    }
-
-    await loadData()
-
-    if (failures.length > 0) {
-      alert(`Added ${added} student(s), skipped ${skipped} duplicate(s).\n\nFailed (${failures.length}):\n${failures.join('\n')}`)
-    } else if (added > 0) {
-      alert(`Added ${added} new student(s) to ${selectedSection}.`)
-    } else {
-      alert(`No new students added — ${skipped} were already in ${selectedSection}.`)
-    }
-  }
-
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const text = await file.text()
-    await addStudentsFromCsv(text)
-    e.target.value = ''
-  }
-
   const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   return (
@@ -296,19 +139,6 @@ h3{margin-top:24px}
           <div className="att-actions">
             <button className="btn-small" onClick={undo} disabled={undoStack.length === 0} style={{ opacity: undoStack.length === 0 ? 0.4 : 1 }}>↩ Undo</button>
             <button className="btn-small" onClick={redo} disabled={redoStack.length === 0} style={{ opacity: redoStack.length === 0 ? 0.4 : 1 }}>↪ Redo</button>
-            <button className="btn-small" onClick={exportExcel}>📥 Download Excel</button>
-            <button className="btn-small" onClick={exportPdf}>📄 PDF</button>
-            <button className="btn-small" onClick={handleUpload}>📤 Upload CSV</button>
-            <button className="btn-small" onClick={() => setShowCsvInput(v => !v)}>{showCsvInput ? '✕ Close' : '✎ Paste CSV'}</button>
-            <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleFile} />
-          </div>
-        )}
-        {showCsvInput && (
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <textarea value={csvText} onChange={e => setCsvText(e.target.value)} rows={6}
-              placeholder={`Name\n"Juan Dela Cruz"\n"Maria Santos"`}
-              style={{ width: '100%', minHeight: 140, resize: 'vertical', background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', fontSize: 13, fontFamily: 'monospace', color: 'var(--text)', boxSizing: 'border-box' }} />
-            <button className="btn-primary" onClick={() => { addStudentsFromCsv(csvText); setCsvText(''); setShowCsvInput(false) }} style={{ alignSelf: 'flex-end' }}>Parse</button>
           </div>
         )}
       </div>
