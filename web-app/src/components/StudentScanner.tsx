@@ -201,7 +201,7 @@ export default function StudentScanner({ onBack, pinValue }: Props) {
     }
 
     const keyAge = Date.now() - new Date(session.rotation_key_updated_at).getTime()
-    if (keyAge > 2000) {
+    if (keyAge > 4000) {
       setErrorMsg('QR code expired. Try again.')
       setScanPhase('fail'); return
     }
